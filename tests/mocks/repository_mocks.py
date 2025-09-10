@@ -132,6 +132,38 @@ class MockPassRepository(IPassRepository):
         """Получить все пропуски"""
         return self._passes.copy()
     
+    async def archive_pass(self, pass_id: int) -> bool:
+        """Переместить пропуск в архив"""
+        for pass_obj in self._passes:
+            if pass_obj.id == pass_id:
+                pass_obj.is_archived = True
+                return True
+        return False
+    
+    async def get_passes_for_archiving(self) -> List[Pass]:
+        """Получить пропуски для архивации"""
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        passes_to_archive = []
+        
+        for pass_obj in self._passes:
+            if pass_obj.is_archived:
+                continue
+                
+            # Использованные пропуски старше 24 часов
+            if (pass_obj.status == 'used' and 
+                pass_obj.used_at and 
+                pass_obj.used_at < now - timedelta(hours=24)):
+                passes_to_archive.append(pass_obj)
+            
+            # Неиспользованные пропуски старше 7 дней
+            elif (pass_obj.status == 'active' and 
+                  pass_obj.created_at and 
+                  pass_obj.created_at < now - timedelta(days=7)):
+                passes_to_archive.append(pass_obj)
+        
+        return passes_to_archive
+    
     def clear(self):
         """Очистить репозиторий"""
         self._passes.clear()
@@ -220,3 +252,4 @@ class MockErrorHandler:
     def clear(self):
         """Очистить обработанные ошибки"""
         self.handled_errors.clear()
+

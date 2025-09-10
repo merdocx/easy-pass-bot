@@ -184,3 +184,7 @@ class BaseEntity:
     def __repr__(self) -> str:
         attrs = ', '.join(f"{k}={v}" for k, v in self.to_dict().items())
         return f"{self.__class__.__name__}({attrs})"
+
+
+
+

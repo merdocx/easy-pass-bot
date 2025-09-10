@@ -264,3 +264,7 @@ class NotificationService(BaseService, INotificationService):
         """Очистить очередь уведомлений"""
         self._notification_queue.clear()
         self.logger.info("Notification queue cleared")
+
+
+
+

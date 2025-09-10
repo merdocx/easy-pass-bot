@@ -119,3 +119,7 @@ class ConfigurationError(EasyPassBotError):
     def __init__(self, message: str, config_key: Optional[str] = None):
         super().__init__(message, "CONFIGURATION_ERROR")
         self.config_key = config_key
+
+
+
+

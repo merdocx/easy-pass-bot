@@ -121,3 +121,7 @@ def old_pass_data():
 def old_pass(old_pass_data):
     """Образец старого пропуска"""
     return Pass(**old_pass_data)
+
+
+
+

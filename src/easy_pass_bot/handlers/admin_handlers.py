@@ -5,6 +5,8 @@ from aiogram.types import CallbackQuery, Message
 from ..database import db
 from ..utils.notifications import notify_user_approved, notify_user_rejected
 from ..security.audit_logger import audit_logger
+from ..security.validator import validator
+from ..security.rate_limiter import rate_limiter
 from ..config import MESSAGES, ROLES, USER_STATUSES
 logger = logging.getLogger(__name__)
 router = Router()
@@ -25,6 +27,17 @@ async def is_admin(telegram_id: int) -> bool:
 
 async def handle_approve_user_callback(callback: CallbackQuery):
     """Обработка одобрения заявки на регистрацию"""
+    # Проверка rate limiting
+    if not await rate_limiter.is_allowed(callback.from_user.id):
+        await callback.answer("⏰ Слишком много запросов. Попробуйте позже.")
+        return
+    
+    # Валидация Telegram ID
+    is_valid, error = validator.validate_telegram_id(callback.from_user.id)
+    if not is_valid:
+        await callback.answer("❌ Ошибка валидации")
+        return
+    
     if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав")
         return

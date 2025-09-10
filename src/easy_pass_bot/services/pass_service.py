@@ -9,6 +9,7 @@ from ..core.interfaces import IPassRepository, IUserRepository, INotificationSer
 from ..core.exceptions import ValidationError, DatabaseError, AuthorizationError
 from ..database.models import Pass
 from ..config import PASS_STATUSES, ROLES, USER_STATUSES
+from ..security.audit_logger import audit_logger
 
 
 class PassService(BaseService):
@@ -65,6 +66,9 @@ class PassService(BaseService):
             pass_id = await self.pass_repository.create(pass_obj)
             pass_obj.id = pass_id
             
+            # Аудит-логирование создания пропуска
+            audit_logger.log_pass_creation(user_id, car_number)
+            
             self.logger.info(
                 f"Pass created: {car_number} for user {user_id} (ID: {pass_id})"
             )
@@ -108,7 +112,7 @@ class PassService(BaseService):
         car_number: str,
         partial: bool = False
     ) -> List[Pass]:
-        """Поиск пропусков по номеру автомобиля"""
+        """Поиск пропусков по номеру автомобиля (исключая архивные)"""
         try:
             car_number = car_number.upper().strip()
             
@@ -117,10 +121,12 @@ class PassService(BaseService):
                 all_passes = await self.pass_repository.get_all()
                 matching_passes = [
                     p for p in all_passes 
-                    if p.status == PASS_STATUSES['ACTIVE'] and car_number in p.car_number
+                    if (p.status == PASS_STATUSES['ACTIVE'] and 
+                        not p.is_archived and 
+                        car_number in p.car_number)
                 ]
             else:
-                # Точный поиск
+                # Точный поиск - репозиторий уже исключает архивные
                 matching_passes = await self.pass_repository.get_by_car_number(car_number)
                 matching_passes = [
                     p for p in matching_passes 
@@ -171,6 +177,9 @@ class PassService(BaseService):
             success = await self.pass_repository.update(pass_obj)
             
             if success:
+                # Аудит-логирование использования пропуска
+                audit_logger.log_pass_usage(pass_obj.user_id, pass_id, pass_obj.car_number, used_by_id)
+                
                 self.logger.info(
                     f"Pass {pass_id} marked as used by user {used_by_id}"
                 )
@@ -230,9 +239,17 @@ class PassService(BaseService):
         try:
             all_passes = await self.pass_repository.get_all()
             
+            # Разделяем на активные и архивные
+            active_passes = [p for p in all_passes if not p.is_archived]
+            archived_passes = [p for p in all_passes if p.is_archived]
+            
             stats = {
                 'total': len(all_passes),
+                'active_total': len(active_passes),
+                'archived_total': len(archived_passes),
                 'by_status': {},
+                'active_by_status': {},
+                'archived_by_status': {},
                 'active_count': 0,
                 'used_count': 0,
                 'cancelled_count': 0,
@@ -242,18 +259,10 @@ class PassService(BaseService):
             
             today = datetime.now().date()
             
+            # Статистика по всем пропускам
             for pass_obj in all_passes:
-                # Статистика по статусам
                 status = pass_obj.status
                 stats['by_status'][status] = stats['by_status'].get(status, 0) + 1
-                
-                # Подсчет статусов
-                if status == PASS_STATUSES['ACTIVE']:
-                    stats['active_count'] += 1
-                elif status == PASS_STATUSES['USED']:
-                    stats['used_count'] += 1
-                elif status == PASS_STATUSES['CANCELLED']:
-                    stats['cancelled_count'] += 1
                 
                 # Статистика за сегодня
                 if pass_obj.created_at.date() == today:
@@ -264,6 +273,23 @@ class PassService(BaseService):
                     status == PASS_STATUSES['USED']):
                     stats['today_used'] += 1
             
+            # Статистика по активным пропускам
+            for pass_obj in active_passes:
+                status = pass_obj.status
+                stats['active_by_status'][status] = stats['active_by_status'].get(status, 0) + 1
+                
+                if status == PASS_STATUSES['ACTIVE']:
+                    stats['active_count'] += 1
+                elif status == PASS_STATUSES['USED']:
+                    stats['used_count'] += 1
+                elif status == PASS_STATUSES['CANCELLED']:
+                    stats['cancelled_count'] += 1
+            
+            # Статистика по архивным пропускам
+            for pass_obj in archived_passes:
+                status = pass_obj.status
+                stats['archived_by_status'][status] = stats['archived_by_status'].get(status, 0) + 1
+            
             return stats
             
         except Exception as e:
@@ -272,12 +298,13 @@ class PassService(BaseService):
             raise DatabaseError(error_msg, operation="get_pass_statistics")
     
     async def get_recent_passes(self, limit: int = 10) -> List[Pass]:
-        """Получить последние пропуски"""
+        """Получить последние пропуски (исключая архивные)"""
         try:
             all_passes = await self.pass_repository.get_all()
-            # Сортируем по дате создания (новые сначала)
+            # Фильтруем архивные пропуски и сортируем по дате создания (новые сначала)
+            active_passes = [p for p in all_passes if not p.is_archived]
             sorted_passes = sorted(
-                all_passes, 
+                active_passes, 
                 key=lambda p: p.created_at, 
                 reverse=True
             )
@@ -337,3 +364,4 @@ class PassService(BaseService):
             error_msg = f"Failed to cleanup old passes: {e}"
             self.logger.error(error_msg)
             raise DatabaseError(error_msg, operation="cleanup_old_passes")
+

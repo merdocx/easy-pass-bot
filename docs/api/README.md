@@ -434,3 +434,7 @@ client.passes.use(pass_obj.id, {"used_by_id": 2})
 - **Документация**: [docs.easypassbot.com](https://docs.easypassbot.com)
 - **Поддержка**: support@easypassbot.com
 - **GitHub**: [github.com/merdocx/easy-pass-bot](https://github.com/merdocx/easy-pass-bot)
+
+
+
+

@@ -13,10 +13,12 @@ from ..services.validation_service import ValidationService
 from ..services.notification_service import NotificationService
 from ..services.user_service import UserService
 from ..services.pass_service import PassService
+from ..services.archive_service import ArchiveService
 from ..services.cache_service import CacheService
 from ..services.error_handler import ErrorHandler
 from ..features.analytics import AnalyticsService
 from ..database.database import Database
+from ..database.pass_repository import PassRepository
 from ..config import BOT_TOKEN
 
 
@@ -81,7 +83,8 @@ class ServiceConfigurator:
         container.register_singleton(IUserRepository, database)
         
         # Репозиторий пропусков
-        container.register_singleton(IPassRepository, database)
+        pass_repository = PassRepository()
+        container.register_singleton(IPassRepository, pass_repository)
     
     async def _configure_business_services(self) -> None:
         """Настроить бизнес-сервисы"""
@@ -108,6 +111,13 @@ class ServiceConfigurator:
             error_handler=error_handler
         )
         container.register_singleton(PassService, pass_service)
+        
+        # Сервис архивации
+        archive_service = ArchiveService(
+            pass_repository=pass_repository,
+            error_handler=error_handler
+        )
+        container.register_singleton(ArchiveService, archive_service)
     
     async def cleanup_services(self) -> None:
         """Очистить все сервисы"""
@@ -143,3 +153,4 @@ async def cleanup_services() -> None:
 def get_service_status() -> dict:
     """Получить статус сервисов"""
     return service_configurator.get_service_status()
+

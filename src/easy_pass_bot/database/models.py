@@ -15,7 +15,6 @@ class User:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 @dataclass
-
 class Pass:
     """Модель пропуска"""
     id: Optional[int] = None
@@ -25,3 +24,4 @@ class Pass:
     created_at: Optional[datetime] = None
     used_at: Optional[datetime] = None
     used_by_id: Optional[int] = None
+    is_archived: bool = False

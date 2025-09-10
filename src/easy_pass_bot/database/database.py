@@ -47,6 +47,7 @@ class Database:
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     used_at TIMESTAMP NULL,
                     used_by_id INTEGER NULL,
+                    is_archived BOOLEAN NOT NULL DEFAULT 0,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     FOREIGN KEY (used_by_id) REFERENCES users(id)
                 )
@@ -79,6 +80,10 @@ class Database:
             await db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_passes_created_at "
                 "ON passes(created_at)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_passes_is_archived "
+                "ON passes(is_archived)"
             )
             await db.commit()
             logger.info("Database initialized successfully")
@@ -220,23 +225,23 @@ class Database:
         """Создание пропуска"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
-                INSERT INTO passes (user_id, car_number, status, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (pass_obj.user_id, pass_obj.car_number, pass_obj.status, datetime.now()))
+                INSERT INTO passes (user_id, car_number, status, created_at, is_archived)
+                VALUES (?, ?, ?, ?, ?)
+            """, (pass_obj.user_id, pass_obj.car_number, pass_obj.status, datetime.now(), pass_obj.is_archived))
             await db.commit()
             return cursor.lastrowid
     async def get_pass_by_id(self, pass_id: int) -> Optional[Pass]:
         """Получение пропуска по ID"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
                 FROM passes WHERE id = ?
             """, (pass_id,)) as cursor:
                 row = await cursor.fetchone()
                 if row:
                     return Pass(
                         id=row[0], user_id=row[1], car_number=row[2], status=row[3],
-                        created_at=row[4], used_at=row[5], used_by_id=row[6]
+                        created_at=row[4], used_at=row[5], used_by_id=row[6], is_archived=bool(row[7])
                     )
                 return None
     async def update_pass_status(self, pass_id: int, status: str, used_by_id: int = None) -> bool:
@@ -261,8 +266,8 @@ class Database:
         from datetime import datetime
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id
-                FROM passes WHERE car_number LIKE ? AND status = 'active'
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes WHERE car_number LIKE ? AND status = 'active' AND is_archived = 0
                 ORDER BY created_at DESC LIMIT 1
             """, (f"%{car_number}%",)) as cursor:
                 row = await cursor.fetchone()
@@ -272,7 +277,7 @@ class Database:
                     used_at = datetime.fromisoformat(row[5]) if row[5] else None
                     return Pass(
                         id=row[0], user_id=row[1], car_number=row[2], status=row[3],
-                        created_at=created_at, used_at=used_at, used_by_id=row[6]
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
                     )
                 return None
     async def find_all_passes_by_car_number(self, car_number: str) -> List[Pass]:
@@ -281,8 +286,8 @@ class Database:
         passes = []
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id
-                FROM passes WHERE car_number LIKE ? AND status = 'active'
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes WHERE car_number LIKE ? AND status = 'active' AND is_archived = 0
                 ORDER BY created_at DESC
             """, (f"%{car_number}%",)) as cursor:
                 async for row in cursor:
@@ -291,16 +296,16 @@ class Database:
                     used_at = datetime.fromisoformat(row[5]) if row[5] else None
                     passes.append(Pass(
                         id=row[0], user_id=row[1], car_number=row[2], status=row[3],
-                        created_at=created_at, used_at=used_at, used_by_id=row[6]
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
                     ))
         return passes
     async def get_user_passes(self, user_id: int) -> List[Pass]:
-        """Получение пропусков пользователя"""
+        """Получение пропусков пользователя (исключая архивные)"""
         from datetime import datetime
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id
-                FROM passes WHERE user_id = ?
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes WHERE user_id = ? AND is_archived = 0
                 ORDER BY created_at DESC
             """, (user_id,)) as cursor:
                 rows = await cursor.fetchall()
@@ -311,22 +316,22 @@ class Database:
                     used_at = datetime.fromisoformat(row[5]) if row[5] else None
                     passes.append(Pass(
                         id=row[0], user_id=row[1], car_number=row[2], status=row[3],
-                        created_at=created_at, used_at=used_at, used_by_id=row[6]
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
                     ))
                 return passes
     async def count_active_passes(self, user_id: int) -> int:
-        """Подсчет активных пропусков пользователя"""
+        """Подсчет активных пропусков пользователя (исключая архивные)"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT COUNT(*) FROM passes WHERE user_id = ? AND status = 'active'
+                SELECT COUNT(*) FROM passes WHERE user_id = ? AND status = 'active' AND is_archived = 0
             """, (user_id,)) as cursor:
                 row = await cursor.fetchone()
                 return row[0] if row else 0
     async def check_duplicate_pass(self, user_id: int, car_number: str) -> bool:
-        """Проверка дублирования пропуска"""
+        """Проверка дублирования пропуска (исключая архивные)"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT COUNT(*) FROM passes WHERE user_id = ? AND car_number = ? AND status = 'active'
+                SELECT COUNT(*) FROM passes WHERE user_id = ? AND car_number = ? AND status = 'active' AND is_archived = 0
             """, (user_id, car_number)) as cursor:
                 row = await cursor.fetchone()
                 return row[0] > 0 if row else False
@@ -337,5 +342,73 @@ class Database:
                 UPDATE passes SET status = 'used', used_at = ?, used_by_id = ? WHERE id = ?
             """, (datetime.now(), used_by_id, pass_id))
             await db.commit()
+    
+    async def archive_pass(self, pass_id: int) -> bool:
+        """Переместить пропуск в архив"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE passes SET is_archived = 1 WHERE id = ?
+            """, (pass_id,))
+            await db.commit()
+            return True
+    
+    async def get_passes_for_archiving(self) -> List[Pass]:
+        """Получить пропуски для архивации"""
+        from datetime import datetime, timedelta
+        passes = []
+        now = datetime.now()
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            # Использованные пропуски старше 24 часов
+            used_cutoff = now - timedelta(hours=24)
+            async with db.execute("""
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes 
+                WHERE status = 'used' AND used_at < ? AND is_archived = 0
+            """, (used_cutoff,)) as cursor:
+                async for row in cursor:
+                    created_at = datetime.fromisoformat(row[4]) if row[4] else None
+                    used_at = datetime.fromisoformat(row[5]) if row[5] else None
+                    passes.append(Pass(
+                        id=row[0], user_id=row[1], car_number=row[2], status=row[3],
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
+                    ))
+            
+            # Неиспользованные пропуски старше 7 дней
+            unused_cutoff = now - timedelta(days=7)
+            async with db.execute("""
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes 
+                WHERE status = 'active' AND created_at < ? AND is_archived = 0
+            """, (unused_cutoff,)) as cursor:
+                async for row in cursor:
+                    created_at = datetime.fromisoformat(row[4]) if row[4] else None
+                    used_at = datetime.fromisoformat(row[5]) if row[5] else None
+                    passes.append(Pass(
+                        id=row[0], user_id=row[1], car_number=row[2], status=row[3],
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
+                    ))
+        
+        return passes
+    
+    async def get_all_passes(self) -> List[Pass]:
+        """Получить все пропуски (включая архивные) - для административных целей"""
+        from datetime import datetime
+        passes = []
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT id, user_id, car_number, status, created_at, used_at, used_by_id, is_archived
+                FROM passes
+                ORDER BY created_at DESC
+            """) as cursor:
+                async for row in cursor:
+                    created_at = datetime.fromisoformat(row[4]) if row[4] else None
+                    used_at = datetime.fromisoformat(row[5]) if row[5] else None
+                    passes.append(Pass(
+                        id=row[0], user_id=row[1], car_number=row[2], status=row[3],
+                        created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
+                    ))
+        return passes
+
 # Глобальный экземпляр базы данных
 db = Database()

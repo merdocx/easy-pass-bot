@@ -354,3 +354,7 @@ class TestPerformance:
         # Проверяем, что система справляется с нагрузкой
         assert duration < 10.0  # Менее 10 секунд для нагрузочного теста
         print(f"Load test performance: {duration:.3f}s for 10 concurrent load operations")
+
+
+
+

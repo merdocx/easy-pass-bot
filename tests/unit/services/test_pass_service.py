@@ -472,3 +472,7 @@ class TestPassService:
         # Должны быть отсортированы по дате создания (новые сначала)
         assert recent_passes[0].id == pass3.id
         assert recent_passes[1].id == pass2.id
+
+
+
+

@@ -274,3 +274,7 @@ class TestValidationService:
         long_apartment = '1' * 11
         await validation_service._validate_apartment(long_apartment)
         assert validation_service.has_errors()
+
+
+
+

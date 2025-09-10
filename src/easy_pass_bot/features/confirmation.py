@@ -45,9 +45,9 @@ class ConfirmationService:
                     del self.pending_confirmations[key]
                     self.confirmation_logger.debug(f"Expired confirmation: {key}")
                 if expired_keys:
-                    self.confirmation_logger.info(f"Cleaned up {len(expired_keys)} expired confirmations")
+                    self.confirmation_logger.info("Cleaned up {len(expired_keys)} expired confirmations")
             except Exception as e:
-                self.confirmation_logger.error(f"Error in confirmation cleanup: {e}")
+                self.confirmation_logger.error("Error in confirmation cleanup: {e}")
     def create_confirmation_keyboard(self, action: str, confirmation_id: str,
                                    confirm_text: str = "✅ Да",
                                    cancel_text: str = "❌ Нет") -> InlineKeyboardMarkup:
@@ -146,7 +146,7 @@ class ConfirmationService:
             Результат выполнения callback или None
         """
         if confirmation_id not in self.pending_confirmations:
-            self.confirmation_logger.warning(f"Confirmation not found: {confirmation_id}")
+            self.confirmation_logger.warning("Confirmation not found: {confirmation_id}")
             return None
         confirmation_data = self.pending_confirmations[confirmation_id]
         # Проверяем, что действие совпадает
@@ -168,13 +168,13 @@ class ConfirmationService:
                     result = await callback(data)
                 else:
                     result = callback(data)
-                self.confirmation_logger.info(f"Confirmation executed: {confirmation_id}")
+                self.confirmation_logger.info("Confirmation executed: {confirmation_id}")
                 return result
             except Exception as e:
-                self.confirmation_logger.error(f"Error executing confirmation {confirmation_id}: {e}")
+                self.confirmation_logger.error("Error executing confirmation {confirmation_id}: {e}")
                 raise
         else:
-            self.confirmation_logger.info(f"Confirmation cancelled: {confirmation_id}")
+            self.confirmation_logger.info("Confirmation cancelled: {confirmation_id}")
             return None
     def get_confirmation_status(self, confirmation_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -203,7 +203,7 @@ class ConfirmationService:
         """
         if confirmation_id in self.pending_confirmations:
             del self.pending_confirmations[confirmation_id]
-            self.confirmation_logger.info(f"Confirmation cancelled: {confirmation_id}")
+            self.confirmation_logger.info("Confirmation cancelled: {confirmation_id}")
             return True
         return False
     def get_pending_confirmations(self) -> Dict[str, Dict[str, Any]]:

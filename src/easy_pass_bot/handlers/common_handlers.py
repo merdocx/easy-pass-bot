@@ -2,12 +2,24 @@ import logging
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
+from ..security.rate_limiter import rate_limiter
+from ..security.validator import validator
 logger = logging.getLogger(__name__)
 router = Router()
 @router.message(Command("help"))
 
 async def help_command(message: Message):
     """Обработка команды /help"""
+    # Проверка rate limiting
+    if not await rate_limiter.is_allowed(message.from_user.id):
+        await message.answer("⏰ Слишком много запросов. Попробуйте позже.")
+        return
+    
+    # Валидация Telegram ID
+    is_valid, error = validator.validate_telegram_id(message.from_user.id)
+    if not is_valid:
+        await message.answer("❌ Ошибка валидации")
+        return
     help_text = """🤖 Easy Pass - Система управления пропусками
 📋 Доступные команды:
 /start - Главное меню

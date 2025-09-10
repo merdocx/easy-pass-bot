@@ -417,3 +417,7 @@ class TestUserService:
         assert ROLES['ADMIN'] in stats['by_role']
         assert USER_STATUSES['PENDING'] in stats['by_status']
         assert USER_STATUSES['APPROVED'] in stats['by_status']
+
+
+
+

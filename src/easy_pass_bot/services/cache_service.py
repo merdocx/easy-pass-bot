@@ -48,7 +48,7 @@ class CacheService:
                     if expired_keys:
                         logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
             except Exception as e:
-                logger.error(f"Error in cache cleanup: {e}")
+                logger.error("Error in cache cleanup: {e}")
     def _generate_key(self, prefix: str, *args, **kwargs) -> str:
         """
         Генерация ключа кэша
@@ -110,7 +110,7 @@ class CacheService:
             logger.debug(f"Cache set: {key} (TTL: {ttl}s)")
             return True
         except Exception as e:
-            logger.error(f"Error setting cache key {key}: {e}")
+            logger.error("Error setting cache key {key}: {e}")
             return False
     async def delete(self, key: str) -> bool:
         """
@@ -135,7 +135,7 @@ class CacheService:
         async with self._lock:
             count = len(self.cache)
             self.cache.clear()
-            logger.info(f"Cache cleared: {count} entries removed")
+            logger.info("Cache cleared: {count} entries removed")
             return count
     async def get_or_set(self, key: str, factory: Callable, ttl: Optional[int] = None) -> Any:
         """
@@ -161,7 +161,7 @@ class CacheService:
             await self.set(key, new_value, ttl)
             return new_value
         except Exception as e:
-            logger.error(f"Error in get_or_set for key {key}: {e}")
+            logger.error("Error in get_or_set for key {key}: {e}")
             raise
     async def invalidate_pattern(self, pattern: str) -> int:
         """
@@ -179,7 +179,7 @@ class CacheService:
             ]
             for key in keys_to_delete:
                 del self.cache[key]
-            logger.info(f"Invalidated {len(keys_to_delete)} cache entries matching pattern: {pattern}")
+            logger.info("Invalidated {len(keys_to_delete)} cache entries matching pattern: {pattern}")
             return len(keys_to_delete)
     async def get_stats(self) -> Dict[str, Any]:
         """
@@ -247,7 +247,7 @@ class CacheService:
                     logger.debug(f"Cache miss for {func.__name__}, result cached")
                     return result
                 except Exception as e:
-                    logger.error(f"Error in cached function {func.__name__}: {e}")
+                    logger.error("Error in cached function {func.__name__}: {e}")
                     raise
             return wrapper
         return decorator

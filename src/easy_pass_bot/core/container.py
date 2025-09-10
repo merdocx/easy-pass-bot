@@ -203,3 +203,7 @@ class ServiceProvider:
 
 # Глобальный провайдер сервисов
 service_provider = ServiceProvider(container)
+
+
+
+

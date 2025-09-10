@@ -66,6 +66,21 @@ class IPassRepository(IRepository):
     async def mark_as_used(self, pass_id: int, used_by_id: int) -> bool:
         """Отметить пропуск как использованный"""
         pass
+    
+    @abstractmethod
+    async def get_all(self) -> List[Any]:
+        """Получить все пропуски (включая архивные)"""
+        pass
+    
+    @abstractmethod
+    async def archive_pass(self, pass_id: int) -> bool:
+        """Переместить пропуск в архив"""
+        pass
+    
+    @abstractmethod
+    async def get_passes_for_archiving(self) -> List[Any]:
+        """Получить пропуски для архивации"""
+        pass
 
 
 class IValidator(ABC):
@@ -184,3 +199,4 @@ class ILogger(ABC):
     def debug(self, message: str, **kwargs) -> None:
         """Отладочное сообщение"""
         pass
+

@@ -563,3 +563,7 @@ A: Используйте встроенные метрики в `monitoring/` �
 - **Lead Developer**: [@merdocx](https://github.com/merdocx)
 - **Issues**: [GitHub Issues](https://github.com/merdocx/easy-pass-bot/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/merdocx/easy-pass-bot/discussions)
+
+
+
+

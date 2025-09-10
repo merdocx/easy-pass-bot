@@ -9,6 +9,7 @@ from ..core.interfaces import IUserRepository, INotificationService
 from ..core.exceptions import ValidationError, DatabaseError, AuthorizationError
 from ..database.models import User
 from ..config import ROLES, USER_STATUSES
+from ..security.audit_logger import audit_logger
 
 
 class UserService(BaseService):
@@ -62,6 +63,13 @@ class UserService(BaseService):
             
             user_id = await self.user_repository.create(user)
             user.id = user_id
+            
+            # Аудит-логирование регистрации пользователя
+            audit_logger.log_user_registration(telegram_id, {
+                'full_name': full_name,
+                'phone_number': phone_number,
+                'apartment': apartment
+            })
             
             self.logger.info(f"User created: {user.full_name} (ID: {user_id})")
             return user
@@ -296,3 +304,7 @@ class UserService(BaseService):
             error_msg = f"Failed to get user statistics: {e}"
             self.logger.error(error_msg)
             raise DatabaseError(error_msg, operation="get_user_statistics")
+
+
+
+
