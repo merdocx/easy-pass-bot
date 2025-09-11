@@ -2,6 +2,7 @@
 Интеграционные тесты для пользовательского workflow
 """
 import pytest
+import pytest_asyncio
 from src.easy_pass_bot.services.user_service import UserService
 from src.easy_pass_bot.services.pass_service import PassService
 from src.easy_pass_bot.services.validation_service import ValidationService
@@ -13,7 +14,7 @@ from src.easy_pass_bot.config import ROLES, USER_STATUSES, PASS_STATUSES
 class TestUserWorkflow:
     """Интеграционные тесты пользовательского workflow"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def services(self):
         """Настройка сервисов для интеграционных тестов"""
         # Создаем репозитории
@@ -333,6 +334,7 @@ class TestUserWorkflow:
         assert pass_stats['active_count'] == 1
         assert pass_stats['used_count'] == 1
         assert pass_stats['cancelled_count'] == 0
+
 
 
 

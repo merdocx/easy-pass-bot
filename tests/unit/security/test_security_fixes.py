@@ -4,9 +4,9 @@
 import pytest
 import asyncio
 from unittest.mock import Mock, patch
-from ..security.validator import validator
-from ..security.rate_limiter import rate_limiter
-from ..security.audit_logger import audit_logger
+from src.easy_pass_bot.security.validator import validator
+from src.easy_pass_bot.security.rate_limiter import rate_limiter
+from src.easy_pass_bot.security.audit_logger import audit_logger
 
 class TestSecurityValidator:
     """Тесты валидатора"""

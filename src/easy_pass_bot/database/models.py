@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-@dataclass
 
+@dataclass
 class User:
     """Модель пользователя"""
     id: Optional[int] = None
@@ -14,6 +14,7 @@ class User:
     status: str = 'pending'
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
 @dataclass
 class Pass:
     """Модель пропуска"""

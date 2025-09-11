@@ -3,13 +3,13 @@
 """
 import pytest
 import asyncio
-from services.cache_service import CacheService
-from services.error_handler import ErrorHandler, ValidationError, DatabaseError
-from services.retry_service import RetryService, RetryStrategy
-from services.circuit_breaker import CircuitBreaker, CircuitState
-from features.analytics import AnalyticsService
-from features.navigation import NavigationService
-from features.confirmation import ConfirmationService
+from src.easy_pass_bot.services.cache_service import CacheService
+from src.easy_pass_bot.services.error_handler import ErrorHandler, ValidationError, DatabaseError
+from src.easy_pass_bot.services.retry_service import RetryService, RetryStrategy
+from src.easy_pass_bot.services.circuit_breaker import CircuitBreaker, CircuitState
+from src.easy_pass_bot.features.analytics import AnalyticsService
+from src.easy_pass_bot.features.navigation import NavigationService
+from src.easy_pass_bot.features.confirmation import ConfirmationService
 @pytest.mark.asyncio
 
 async def test_cache_service():
@@ -173,6 +173,7 @@ async def test_retry_strategies():
     retry_fixed = RetryService(strategy=RetryStrategy.FIXED, base_delay=0.1)
     assert retry_fixed.calculate_delay(1) == 0.1
     assert retry_fixed.calculate_delay(5) == 0.1
+
 
 
 

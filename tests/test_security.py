@@ -3,9 +3,9 @@
 """
 import pytest
 import asyncio
-from security.rate_limiter import RateLimiter
-from security.validator import InputValidator
-from security.audit_logger import AuditLogger
+from src.easy_pass_bot.security.rate_limiter import RateLimiter
+from src.easy_pass_bot.security.validator import InputValidator
+from src.easy_pass_bot.security.audit_logger import AuditLogger
 @pytest.mark.asyncio
 
 async def test_rate_limiter_allows_requests():
@@ -121,6 +121,7 @@ def test_sanitize_input():
     long_text = "a" * 2000
     sanitized = validator.sanitize_input(long_text)
     assert len(sanitized) <= 1000
+
 
 
 

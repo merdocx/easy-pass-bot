@@ -2,8 +2,8 @@
 Тесты для модуля базы данных
 """
 import pytest
-from database.models import User, Pass
-from config import USER_STATUSES, PASS_STATUSES
+from src.easy_pass_bot.database.models import User, Pass
+from src.easy_pass_bot.config import USER_STATUSES, PASS_STATUSES
 @pytest.mark.asyncio
 
 async def test_create_user(test_db, sample_user):
@@ -115,14 +115,14 @@ async def test_update_pass_status(test_db, sample_user, sample_pass):
     assert updated_pass.status == PASS_STATUSES['USED']
 @pytest.mark.asyncio
 
-async def test_get_all_users(test_db, sample_user, sample_admin):
+async def test_get_all_users(test_db, sample_user, admin_user):
     """Тест получения всех пользователей"""
     # Создаем пользователей
     await test_db.create_user(sample_user)
-    await test_db.create_user(sample_admin)
+    await test_db.create_user(admin_user)
     # Получаем всех пользователей
     users = await test_db.get_all_users()
     assert len(users) == 2
     telegram_ids = [user.telegram_id for user in users]
     assert sample_user.telegram_id in telegram_ids
-    assert sample_admin.telegram_id in telegram_ids
+    assert admin_user.telegram_id in telegram_ids

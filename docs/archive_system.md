@@ -196,3 +196,4 @@ CREATE INDEX idx_passes_is_archived ON passes(is_archived);
 3. При необходимости выполните откат миграции
 
 
+

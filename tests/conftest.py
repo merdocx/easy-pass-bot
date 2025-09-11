@@ -2,6 +2,7 @@
 Конфигурация тестов для Easy Pass Bot
 """
 import pytest
+import pytest_asyncio
 import asyncio
 import tempfile
 import os
@@ -19,7 +20,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db():
     """Фикстура тестовой базы данных"""
     # Создаем временную базу данных
@@ -36,7 +37,7 @@ async def test_db():
     os.unlink(temp_file.name)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_user():
     """Образец пользователя для тестов"""
     return User(
@@ -49,7 +50,7 @@ async def sample_user():
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_pass():
     """Образец пропуска для тестов"""
     return Pass(
@@ -59,7 +60,7 @@ async def sample_pass():
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def admin_user():
     """Образец администратора для тестов"""
     return User(
@@ -72,7 +73,7 @@ async def admin_user():
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def security_user():
     """Образец охранника для тестов"""
     return User(
@@ -110,7 +111,7 @@ def mock_dispatcher():
     return dp
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def initialized_services():
     """Инициализированные сервисы для тестов"""
     from src.easy_pass_bot.services.validation_service import ValidationService

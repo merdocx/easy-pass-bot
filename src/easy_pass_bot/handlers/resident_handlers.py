@@ -56,8 +56,6 @@ async def start_command(message: Message):
             from ..keyboards.security_keyboards import get_security_main_menu
             await message.answer("Нажмите на кнопку \"🔍 Найти пропуск\" для поиска заявки. После открытия шлагбаума отметьте пропуск как использованный, нажав \"✅\" под пропуском.", reply_markup=get_security_main_menu())
         elif user.role == ROLES['ADMIN'] and user.status == USER_STATUSES['APPROVED']:
-            analytics_service.track_page_view(user_id, "admin_panel")
-            navigation_service.add_to_history(user_id, "admin_panel")
             await message.answer("👑 Панель администратора Easy Pass\n\nВы будете получать уведомления о новых заявках на регистрацию.\nДля модерации используйте кнопки в уведомлениях.")
     except Exception as e:
         # Обрабатываем ошибку через централизованный обработчик

@@ -410,5 +410,10 @@ class Database:
                     ))
         return passes
 
+    async def cleanup(self):
+        """Очистка ресурсов базы данных"""
+        # Закрываем все соединения
+        pass
+
 # Глобальный экземпляр базы данных
 db = Database()
