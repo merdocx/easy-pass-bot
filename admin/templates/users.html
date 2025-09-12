@@ -33,6 +33,7 @@
     </nav>
     
     <main class="dashboard-content">
+
         <!-- Статистика -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -57,42 +58,6 @@
             </div>
         </div>
         
-        <!-- Фильтры и поиск -->
-        <div class="filters-section">
-            <form method="get" class="filters-form" id="searchForm">
-                <div class="filter-group">
-                    <input type="text" name="search" placeholder="Поиск по имени, ID или телефону..." 
-                           value="{{ search }}" class="search-input" id="searchInput">
-                </div>
-                <div class="filter-group">
-                    <select name="status_filter" class="filter-select" id="statusFilter">
-                        <option value="">Все статусы</option>
-                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидают</option>
-                        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Подтверждены</option>
-                        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Отклонены</option>
-                        <option value="blocked" {% if status_filter == 'blocked' %}selected{% endif %}>Заблокированы</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <select name="role_filter" class="filter-select" id="roleFilter">
-                        <option value="">Все роли</option>
-                        <option value="resident" {% if role_filter == 'resident' %}selected{% endif %}>Жители</option>
-                        <option value="security" {% if role_filter == 'security' %}selected{% endif %}>Охрана</option>
-                        <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администраторы</option>
-                    </select>
-                </div>
-                <div class="filter-actions">
-                    <div class="search-status" id="searchStatus">
-                        <i class="fas fa-search"></i>
-                        <span>Поиск автоматический</span>
-                    </div>
-                    <a href="/users" class="btn btn-secondary">
-                        <i class="fas fa-times"></i>
-                        Сбросить
-                    </a>
-                </div>
-            </form>
-        </div>
         
         <!-- Таблица пользователей -->
         <div class="table-container">
@@ -204,11 +169,17 @@
                 </tbody>
             </table>
             
+            <!-- Индикатор загрузки для infinite scroll -->
+            <div id="loading-indicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <span>Загрузка пользователей...</span>
+            </div>
+            
             {% if not users %}
             <div class="empty-state">
                 <i class="fas fa-users"></i>
                 <h3>Пользователи не найдены</h3>
-                <p>Попробуйте изменить параметры поиска или фильтры</p>
+                <p>В системе пока нет зарегистрированных пользователей</p>
             </div>
             {% endif %}
         </div>
@@ -310,37 +281,146 @@ window.onclick = function(event) {
     }
 }
 
-// Автоматический поиск с debounce
-let searchTimeout;
-function performSearch() {
-    const form = document.getElementById('searchForm');
-    const searchStatus = document.getElementById('searchStatus');
+// Infinite Scroll для пользователей
+let isLoading = false;
+let currentOffset = 20; // Начинаем с 20, так как первые 20 уже загружены
+let hasMoreData = {{ has_more|tojson }}; // Переменная из шаблона
+
+async function loadMoreUsers() {
+    if (isLoading || !hasMoreData) return;
     
-    // Показываем индикатор поиска
-    searchStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Поиск...</span>';
+    isLoading = true;
+    const loadingIndicator = document.getElementById('loading-indicator');
+    loadingIndicator.style.display = 'flex';
     
-    // Отправляем форму
-    form.submit();
+    try {
+        const response = await fetch(`/api/users?offset=${currentOffset}&limit=20`);
+        const data = await response.json();
+        
+        if (data.users && data.users.length > 0) {
+            const tableBody = document.querySelector('.data-table tbody');
+            
+            data.users.forEach(user => {
+                const row = createUserRow(user);
+                tableBody.appendChild(row);
+            });
+            
+            currentOffset += data.users.length;
+            hasMoreData = data.has_more;
+        } else {
+            hasMoreData = false;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+    } finally {
+        isLoading = false;
+        loadingIndicator.style.display = 'none';
+    }
 }
 
-// Debounce функция для поиска
-function debounceSearch() {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(performSearch, 500); // 500ms задержка
+function createUserRow(user) {
+    const row = document.createElement('tr');
+    
+    // Определяем роль
+    let roleHtml = '';
+    if (user.role === 'admin') {
+        roleHtml = '<span class="role-badge role-admin"><i class="fas fa-crown"></i> Админ</span>';
+    } else if (user.role === 'security') {
+        roleHtml = '<span class="role-badge role-security"><i class="fas fa-shield-alt"></i> Охрана</span>';
+    } else {
+        roleHtml = '<span class="role-badge role-resident"><i class="fas fa-user"></i> Житель</span>';
+    }
+    
+    // Определяем статус
+    let statusHtml = '';
+    if (user.status === 'approved') {
+        statusHtml = '<span class="status-badge status-approved"><i class="fas fa-check"></i> Подтвержден</span>';
+    } else if (user.status === 'pending') {
+        statusHtml = '<span class="status-badge status-pending"><i class="fas fa-clock"></i> Ожидает</span>';
+    } else if (user.status === 'blocked') {
+        statusHtml = `<span class="status-badge status-blocked"><i class="fas fa-ban"></i> Заблокирован${user.blocked_until ? '<br><small>до ' + user.blocked_until + '</small>' : ''}</span>`;
+    } else {
+        statusHtml = '<span class="status-badge status-rejected"><i class="fas fa-times"></i> Отклонен</span>';
+    }
+    
+    // Определяем действия
+    let actionsHtml = '';
+    if (user.status === 'pending') {
+        actionsHtml = `
+            <form method="post" action="/users/${user.id}/status" class="inline-form">
+                <input type="hidden" name="status" value="approved">
+                <button type="submit" class="btn btn-sm btn-success" title="Принять">
+                    <i class="fas fa-check"></i>
+                </button>
+            </form>
+            <form method="post" action="/users/${user.id}/status" class="inline-form">
+                <input type="hidden" name="status" value="rejected">
+                <button type="submit" class="btn btn-sm btn-danger" title="Отклонить">
+                    <i class="fas fa-times"></i>
+                </button>
+            </form>
+        `;
+    } else if (user.status === 'approved') {
+        actionsHtml = `
+            <button class="btn btn-sm btn-warning" onclick="openBlockModal(${user.id}, '${user.full_name}')" title="Заблокировать">
+                <i class="fas fa-ban"></i>
+            </button>
+        `;
+    } else if (user.status === 'blocked') {
+        actionsHtml = `
+            <form method="post" action="/users/${user.id}/unblock" class="inline-form">
+                <button type="submit" class="btn btn-sm btn-success" title="Разблокировать">
+                    <i class="fas fa-unlock"></i>
+                </button>
+            </form>
+            <form method="post" action="/users/${user.id}/delete" class="inline-form">
+                <button type="submit" class="btn btn-sm btn-danger" title="Удалить"
+                        onclick="return confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить!')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+        `;
+    }
+    
+    row.innerHTML = `
+        <td>${user.id}</td>
+        <td>${user.telegram_id}</td>
+        <td>${user.full_name}</td>
+        <td>${user.phone_number}</td>
+        <td>${user.apartment || '-'}</td>
+        <td>${roleHtml}</td>
+        <td>${statusHtml}</td>
+        <td>${user.created_at || '-'}</td>
+        <td class="actions">${actionsHtml}</td>
+    `;
+    
+    return row;
 }
 
-// Обработчики событий для автоматического поиска
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const statusFilter = document.getElementById('statusFilter');
-    const roleFilter = document.getElementById('roleFilter');
-    
-    // Поиск по вводу текста
-    searchInput.addEventListener('input', debounceSearch);
-    
-    // Поиск при изменении фильтров
-    statusFilter.addEventListener('change', performSearch);
-    roleFilter.addEventListener('change', performSearch);
+// Обработчик скролла
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+        loadMoreUsers();
+    }
 });
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Добавляем обработчики событий для новых форм
+    document.addEventListener('submit', function(e) {
+        if (e.target.tagName === 'FORM') {
+            const statusInput = e.target.querySelector('input[name="status"]');
+            if (statusInput) {
+                const status = statusInput.value;
+                const action = status === 'approved' ? 'подтвердить' : 'отклонить';
+                
+                if (!confirm(`Вы уверены, что хотите ${action} этого пользователя?`)) {
+                    e.preventDefault();
+                }
+            }
+        }
+    });
+});
+
 </script>
 {% endblock %}

@@ -341,6 +341,96 @@ body {
     font-weight: 500;
 }
 
+/* Стили для информации о фильтрах */
+.filter-info {
+    margin-bottom: 1.5rem;
+}
+
+.filter-active {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #f59e0b;
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-active i.fas.fa-filter {
+    color: #f59e0b;
+    font-size: 1.1rem;
+}
+
+.filter-active > span:first-of-type {
+    font-weight: 600;
+    color: #92400e;
+    margin-right: 0.5rem;
+}
+
+.filter-tag {
+    background: rgba(245, 158, 11, 0.2);
+    color: #92400e;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.clear-filters-btn {
+    background: var(--danger-color);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s;
+    margin-left: auto;
+}
+
+.clear-filters-btn:hover {
+    background: #dc2626;
+    color: white;
+}
+
+/* Стили для индикатора загрузки infinite scroll */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: var(--background);
+    border-radius: var(--radius-lg);
+    margin: 1rem 0;
+    box-shadow: var(--shadow);
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 0.75rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-indicator span {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
 /* Фильтры */
 .filters-section {
     background: var(--background);
@@ -364,26 +454,6 @@ body {
     align-items: center;
 }
 
-.search-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: rgba(37, 99, 235, 0.1);
-    color: var(--primary-color);
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-    font-weight: 500;
-    border: 1px solid rgba(37, 99, 235, 0.2);
-}
-
-.search-status i {
-    font-size: 0.875rem;
-}
-
-.search-status .fa-spinner {
-    animation: spin 1s linear infinite;
-}
 
 @keyframes spin {
     0% { transform: rotate(0deg); }
@@ -662,11 +732,6 @@ body {
         gap: 0.5rem;
     }
     
-    .search-status {
-        justify-content: center;
-        text-align: center;
-    }
-    
     .table-container {
         overflow-x: auto;
     }
@@ -851,3 +916,330 @@ body {
         width: 100%;
     }
 }
+
+/* ===========================================
+   ПАГИНАЦИЯ
+   =========================================== */
+
+.pagination-container {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: var(--background);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.pagination-info {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.pagination-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    box-shadow: var(--shadow-sm);
+}
+
+.pagination-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.pagination-btn:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.pagination-pages {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0 1rem;
+}
+
+.pagination-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    padding: 0.5rem;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.pagination-page:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.pagination-page:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.pagination-current {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+}
+
+.pagination-current:hover {
+    background: var(--primary-dark) !important;
+    border-color: var(--primary-dark) !important;
+    transform: none;
+}
+
+.pagination-ellipsis {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+/* Адаптивность пагинации */
+@media (max-width: 768px) {
+    .pagination-container {
+        margin-top: 1.5rem;
+        padding: 1rem;
+    }
+    
+    .pagination {
+        gap: 0.25rem;
+    }
+    
+    .pagination-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        min-height: 40px;
+    }
+    
+    .pagination-btn span {
+        display: none;
+    }
+    
+    .pagination-pages {
+        margin: 0 0.5rem;
+        gap: 0.125rem;
+    }
+    
+    .pagination-page {
+        min-width: 40px;
+        height: 40px;
+        padding: 0.375rem;
+        font-size: 0.8rem;
+    }
+    
+    .pagination-ellipsis {
+        min-width: 40px;
+        height: 40px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .pagination-container {
+        padding: 0.75rem;
+    }
+    
+    .pagination-info {
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .pagination {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .pagination-pages {
+        margin: 0;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .pagination-btn {
+        width: 100%;
+        justify-content: center;
+        max-width: 200px;
+    }
+    
+    .pagination-btn span {
+        display: inline;
+    }
+}
+
+/* Стили для новой пагинации со страницами */
+.pagination-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    margin: 0 2px;
+    background: #fff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    color: #374151;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.pagination-page:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #111827;
+}
+
+.pagination-page.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+}
+
+.pagination-page.active:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    margin: 0 2px;
+    color: #9ca3af;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .pagination-page {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        font-size: 13px;
+    }
+    
+    .pagination-ellipsis {
+        min-width: 36px;
+        height: 36px;
+        font-size: 13px;
+    }
+}
+
+
+/* Стили для автоматических фильтров по столбцам */
+.filter-row {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.filter-row td {
+    padding: 8px 12px;
+    vertical-align: middle;
+}
+
+.column-filter {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: #fff;
+    transition: border-color 0.2s ease;
+}
+
+.column-filter:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.column-filter::placeholder {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+/* Стили для select фильтров */
+.column-filter select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+/* Стили для кнопки очистки фильтров */
+.filter-row .btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: auto;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .filter-row td {
+        padding: 6px 8px;
+    }
+    
+    .column-filter {
+        padding: 4px 6px;
+        font-size: 12px;
+    }
+    
+    .column-filter::placeholder {
+        font-size: 11px;
+    }
+}
+

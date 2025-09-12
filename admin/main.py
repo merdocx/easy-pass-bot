@@ -5,6 +5,7 @@ import bcrypt
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+from urllib.parse import urlencode
 from fastapi import FastAPI, Request, Form, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,7 @@ app = FastAPI(title="Easy Pass Admin Panel", version="1.0.0")
 # Подключение статических файлов и шаблонов
 app.mount("/static", StaticFiles(directory="/root/easy_pass_bot/admin/static"), name="static")
 templates = Jinja2Templates(directory="/root/easy_pass_bot/admin/templates")
+
 
 # Защищенные маршруты (требуют авторизации)
 PROTECTED_ROUTES = {
@@ -224,47 +226,33 @@ async def dashboard_post(request: Request, current_user: str = Depends(require_a
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(
     request: Request, 
-    current_user: str = Depends(require_auth_dependency),
-    search: Optional[str] = None,
-    status_filter: Optional[str] = None,
-    role_filter: Optional[str] = None
+    current_user: str = Depends(require_auth_dependency)
 ):
     """Страница управления пользователями"""
     try:
-        users = await db.get_all_users()
-        
-        # Фильтрация пользователей
-        if search:
-            users = [u for u in users if search.lower() in u.full_name.lower() 
-                    or search in str(u.telegram_id) 
-                    or search in u.phone_number]
-        
-        if status_filter:
-            users = [u for u in users if u.status == status_filter]
-        
-        if role_filter:
-            users = [u for u in users if u.role == role_filter]
+        # Получаем всех пользователей для статистики
+        all_users = await db.get_all_users()
         
         # Статистика
-        all_users = await db.get_all_users()
         total_users = len(all_users)
         pending_users = len([u for u in all_users if u.status == 'pending'])
         approved_users = len([u for u in all_users if u.status == 'approved'])
         rejected_users = len([u for u in all_users if u.status == 'rejected'])
         blocked_users = len([u for u in all_users if u.status == 'blocked'])
         
+        # Для таблицы загружаем только первые 20 пользователей
+        users = all_users[:20] if all_users else []
+        
         return templates.TemplateResponse("users.html", {
             "request": request,
             "current_user": current_user,
             "users": users,
-            "search": search or "",
-            "status_filter": status_filter or "",
-            "role_filter": role_filter or "",
             "total_users": total_users,
             "pending_users": pending_users,
             "approved_users": approved_users,
             "rejected_users": rejected_users,
-            "blocked_users": blocked_users
+            "blocked_users": blocked_users,
+            "has_more": len(all_users) > 20 if all_users else False
         })
     except Exception as e:
         logger.error(f"Error loading users page: {e}")
@@ -298,20 +286,21 @@ async def update_user_status(
 @app.get("/passes", response_class=HTMLResponse)
 async def passes_page(
     request: Request,
-    current_user: str = Depends(require_auth_dependency),
-    search: Optional[str] = None,
-    status_filter: Optional[str] = None
+    current_user: str = Depends(require_auth_dependency)
 ):
     """Страница просмотра пропусков"""
     try:
-        passes = await db.get_all_passes()
+        # Получаем все пропуски для статистики
+        all_passes = await db.get_all_passes()
         
-        # Фильтрация пропусков
-        if search:
-            passes = [p for p in passes if search.lower() in p.car_number.lower()]
+        # Статистика
+        total_passes = len(all_passes)
+        active_passes = len([p for p in all_passes if p.status == 'active'])
+        used_passes = len([p for p in all_passes if p.status == 'used'])
+        cancelled_passes = len([p for p in all_passes if p.status == 'cancelled'])
         
-        if status_filter:
-            passes = [p for p in passes if p.status == status_filter]
+        # Для таблицы загружаем только первые 20 пропусков
+        passes = all_passes[:20] if all_passes else []
         
         # Получаем информацию о пользователях для каждого пропуска
         passes_with_users = []
@@ -322,43 +311,71 @@ async def passes_page(
                 "user": user
             })
         
-        # Статистика
-        total_passes = len(await db.get_all_passes())
-        active_passes = len([p for p in passes if p.status == 'active'])
-        used_passes = len([p for p in passes if p.status == 'used'])
-        cancelled_passes = len([p for p in passes if p.status == 'cancelled'])
-        
         return templates.TemplateResponse("passes.html", {
             "request": request,
             "current_user": current_user,
             "passes_with_users": passes_with_users,
-            "search": search or "",
-            "status_filter": status_filter or "",
             "total_passes": total_passes,
             "active_passes": active_passes,
             "used_passes": used_passes,
-            "cancelled_passes": cancelled_passes
+            "cancelled_passes": cancelled_passes,
+            "has_more": len(all_passes) > 20 if all_passes else False
         })
     except Exception as e:
         logger.error(f"Error loading passes page: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки страницы пропусков")
 
 @app.get("/api/users")
-async def api_get_users(current_user: str = Depends(require_auth_dependency)):
-    """API для получения списка пользователей"""
+async def api_get_users(
+    current_user: str = Depends(require_auth_dependency),
+    offset: int = 0,
+    limit: int = 20
+):
+    """API для получения списка пользователей с пагинацией"""
     try:
         users = await db.get_all_users()
-        return {"users": [user.__dict__ for user in users]}
+        total_count = len(users)
+        
+        # Применяем пагинацию
+        paginated_users = users[offset:offset + limit]
+        
+        return {
+            "users": [user.__dict__ for user in paginated_users],
+            "total_count": total_count,
+            "has_more": offset + limit < total_count
+        }
     except Exception as e:
         logger.error(f"Error getting users via API: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения пользователей")
 
 @app.get("/api/passes")
-async def api_get_passes(current_user: str = Depends(require_auth_dependency)):
-    """API для получения списка пропусков"""
+async def api_get_passes(
+    current_user: str = Depends(require_auth_dependency),
+    offset: int = 0,
+    limit: int = 20
+):
+    """API для получения списка пропусков с пагинацией"""
     try:
         passes = await db.get_all_passes()
-        return {"passes": [pass_obj.__dict__ for pass_obj in passes]}
+        total_count = len(passes)
+        
+        # Применяем пагинацию
+        paginated_passes = passes[offset:offset + limit]
+        
+        # Получаем информацию о пользователях для каждого пропуска
+        passes_with_users = []
+        for pass_obj in paginated_passes:
+            user = await db.get_user_by_id(pass_obj.user_id)
+            passes_with_users.append({
+                "pass": pass_obj.__dict__,
+                "user": user.__dict__ if user else None
+            })
+        
+        return {
+            "passes_with_users": passes_with_users,
+            "total_count": total_count,
+            "has_more": offset + limit < total_count
+        }
     except Exception as e:
         logger.error(f"Error getting passes via API: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения пропусков")

@@ -33,6 +33,7 @@
     </nav>
     
     <main class="dashboard-content">
+
         <!-- Статистика -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -53,33 +54,6 @@
             </div>
         </div>
         
-        <!-- Фильтры и поиск -->
-        <div class="filters-section">
-            <form method="get" class="filters-form" id="searchForm">
-                <div class="filter-group">
-                    <input type="text" name="search" placeholder="Поиск по номеру автомобиля..." 
-                           value="{{ search }}" class="search-input" id="searchInput">
-                </div>
-                <div class="filter-group">
-                    <select name="status_filter" class="filter-select" id="statusFilter">
-                        <option value="">Все статусы</option>
-                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
-                        <option value="used" {% if status_filter == 'used' %}selected{% endif %}>Использованы</option>
-                        <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Отменены</option>
-                    </select>
-                </div>
-                <div class="filter-actions">
-                    <div class="search-status" id="searchStatus">
-                        <i class="fas fa-search"></i>
-                        <span>Поиск автоматический</span>
-                    </div>
-                    <a href="/passes" class="btn btn-secondary">
-                        <i class="fas fa-times"></i>
-                        Сбросить
-                    </a>
-                </div>
-            </form>
-        </div>
         
         <!-- Таблица пропусков -->
         <div class="table-container">
@@ -94,7 +68,6 @@
                         <th>Статус</th>
                         <th>Дата создания</th>
                         <th>Дата использования</th>
-                        <th>Использован кем</th>
                         <th>Архив</th>
                     </tr>
                 </thead>
@@ -139,7 +112,20 @@
                                 {% endif %}
                             </span>
                         </td>
-                        <td>{{ pass.created_at if pass.created_at else '-' }}</td>
+                        <td>
+                            {% if pass.created_at %}
+                                {% set date_str = pass.created_at|string %}
+                                {% if ' ' in date_str %}
+                                    {{ date_str.split(' ')[0] }} {{ date_str.split(' ')[1].split(':')[0] }}:{{ date_str.split(' ')[1].split(':')[1] }}
+                                {% elif 'T' in date_str %}
+                                    {{ date_str.split('T')[0] }} {{ date_str.split('T')[1].split(':')[0] }}:{{ date_str.split('T')[1].split(':')[1] }}
+                                {% else %}
+                                    {{ date_str }}
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                         <td>
                             {% if pass.used_at %}
                                 {{ pass.used_at }}
@@ -148,16 +134,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if pass.used_by_id %}
-                                ID: {{ pass.used_by_id }}
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
                             {% if pass.is_archived %}
-                                <span class="badge badge-archived">
-                                    <i class="fas fa-archive"></i> В архиве
+                                <span class="badge badge-archived" title="В архиве">
+                                    <i class="fas fa-archive"></i>
                                 </span>
                             {% else %}
                                 <span class="text-muted">-</span>
@@ -168,47 +147,109 @@
                 </tbody>
             </table>
             
+            <!-- Индикатор загрузки для infinite scroll -->
+            <div id="loading-indicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <span>Загрузка пропусков...</span>
+            </div>
+            
             {% if not passes_with_users %}
             <div class="empty-state">
                 <i class="fas fa-car"></i>
                 <h3>Пропуски не найдены</h3>
-                <p>Попробуйте изменить параметры поиска или фильтры</p>
+                <p>В системе пока нет созданных пропусков</p>
             </div>
             {% endif %}
         </div>
+        
     </main>
 </div>
 
 <script>
-// Автоматический поиск с debounce
-let searchTimeout;
-function performSearch() {
-    const form = document.getElementById('searchForm');
-    const searchStatus = document.getElementById('searchStatus');
+// Infinite Scroll для пропусков
+let isLoading = false;
+let currentOffset = 20; // Начинаем с 20, так как первые 20 уже загружены
+let hasMoreData = {{ has_more|tojson }}; // Переменная из шаблона
+
+async function loadMorePasses() {
+    if (isLoading || !hasMoreData) return;
     
-    // Показываем индикатор поиска
-    searchStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Поиск...</span>';
+    isLoading = true;
+    const loadingIndicator = document.getElementById('loading-indicator');
+    loadingIndicator.style.display = 'flex';
     
-    // Отправляем форму
-    form.submit();
+    try {
+        const response = await fetch(`/api/passes?offset=${currentOffset}&limit=20`);
+        const data = await response.json();
+        
+        if (data.passes_with_users && data.passes_with_users.length > 0) {
+            const tableBody = document.querySelector('.data-table tbody');
+            
+            data.passes_with_users.forEach(item => {
+                const row = createPassRow(item.pass, item.user);
+                tableBody.appendChild(row);
+            });
+            
+            currentOffset += data.passes_with_users.length;
+            hasMoreData = data.has_more;
+        } else {
+            hasMoreData = false;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки пропусков:', error);
+    } finally {
+        isLoading = false;
+        loadingIndicator.style.display = 'none';
+    }
 }
 
-// Debounce функция для поиска
-function debounceSearch() {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(performSearch, 500); // 500ms задержка
+function createPassRow(pass, user) {
+    const row = document.createElement('tr');
+    
+    // Определяем статус пропуска
+    let statusHtml = '';
+    if (pass.status === 'active') {
+        statusHtml = '<span class="status-badge status-active"><i class="fas fa-check-circle"></i> Активный</span>';
+    } else if (pass.status === 'used') {
+        statusHtml = '<span class="status-badge status-used"><i class="fas fa-check"></i> Использован</span>';
+    } else if (pass.status === 'cancelled') {
+        statusHtml = '<span class="status-badge status-cancelled"><i class="fas fa-times"></i> Отменен</span>';
+    }
+    
+    // Определяем архивный статус
+    let archiveHtml = '';
+    if (pass.is_archived) {
+        archiveHtml = '<span class="status-badge status-archived"><i class="fas fa-archive"></i> Архивирован</span>';
+    } else {
+        archiveHtml = '<span class="status-badge status-active"><i class="fas fa-folder-open"></i> Активный</span>';
+    }
+    
+    row.innerHTML = `
+        <td>${pass.id}</td>
+        <td>${pass.car_number}</td>
+        <td>${user ? user.full_name : 'Неизвестно'}</td>
+        <td>${user ? user.phone_number : '-'}</td>
+        <td>${user ? (user.apartment || '-') : '-'}</td>
+        <td>${statusHtml}</td>
+        <td>${pass.created_at || '-'}</td>
+        <td>${pass.used_at || '-'}</td>
+        <td>${archiveHtml}</td>
+    `;
+    
+    return row;
 }
 
-// Обработчики событий для автоматического поиска
+// Обработчик скролла
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+        loadMorePasses();
+    }
+});
+
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const statusFilter = document.getElementById('statusFilter');
-    
-    // Поиск по вводу текста
-    searchInput.addEventListener('input', debounceSearch);
-    
-    // Поиск при изменении фильтров
-    statusFilter.addEventListener('change', performSearch);
+    // Можно добавить дополнительную инициализацию при необходимости
 });
 </script>
+
 {% endblock %}
