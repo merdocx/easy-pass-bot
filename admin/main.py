@@ -461,6 +461,58 @@ async def unblock_user(
         logger.error(f"Error unblocking user: {e}")
         raise HTTPException(status_code=500, detail="Ошибка разблокировки пользователя")
 
+@app.post("/users/{user_id}/role")
+async def change_user_role(
+    request: Request,
+    user_id: int,
+    new_role: str = Form(...),
+    current_user: str = Depends(require_auth_dependency)
+):
+    """Изменение роли пользователя"""
+    try:
+        # Проверяем, что текущий пользователь - админ
+        current_user_obj = await db.get_user_by_username(current_user)
+        if not current_user_obj or current_user_obj.role != 'admin':
+            logger.warning(f"Non-admin user {current_user} attempted to change role")
+            raise HTTPException(status_code=403, detail="Только администраторы могут изменять роли")
+        
+        # Получаем пользователя для изменения роли
+        user = await db.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        # Проверяем валидность новой роли
+        valid_roles = ['resident', 'security', 'admin']
+        if new_role not in valid_roles:
+            raise HTTPException(status_code=400, detail="Недопустимая роль")
+        
+        # Проверяем, что админ не может изменить роль другого админа
+        if user.role == 'admin' and current_user_obj.id != user.id:
+            logger.warning(f"Admin {current_user} attempted to change another admin's role")
+            raise HTTPException(status_code=403, detail="Нельзя изменить роль другого администратора")
+        
+        # Проверяем, что админ не может изменить свою роль
+        if current_user_obj.id == user.id:
+            logger.warning(f"Admin {current_user} attempted to change their own role")
+            raise HTTPException(status_code=403, detail="Нельзя изменить собственную роль")
+        
+        # Сохраняем старую роль для логирования
+        old_role = user.role
+        
+        # Изменяем роль
+        await db.change_user_role(user_id, new_role)
+        
+        # Логируем изменение роли
+        logger.info(f"Admin {current_user} (ID: {current_user_obj.id}) changed user {user.full_name} (ID: {user_id}) role from '{old_role}' to '{new_role}'")
+        
+        return RedirectResponse(url="/users", status_code=302)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error changing user {user_id} role: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка изменения роли пользователя")
+
 @app.post("/users/{user_id}/delete")
 async def delete_user(
     request: Request,

@@ -10,6 +10,7 @@ sys.path.append('/root/easy_pass_bot/admin')
 sys.path.append('/root/easy_pass_bot/src')
 
 from admin.main import app, admin_auth, db
+from easy_pass_bot.database.models import User
 
 class TestAdminPanel:
     """Тесты для веб-админки Easy Pass"""
@@ -25,7 +26,11 @@ class TestAdminPanel:
         with patch.object(db, 'get_all_users') as mock_users, \
              patch.object(db, 'get_all_passes') as mock_passes, \
              patch.object(db, 'update_user_status') as mock_update, \
-             patch.object(db, 'get_user_by_id') as mock_get_user:
+             patch.object(db, 'get_user_by_id') as mock_get_user, \
+             patch.object(db, 'get_user_by_username') as mock_get_user_by_username, \
+             patch.object(db, 'change_user_role') as mock_change_user_role, \
+             patch.object(admin_auth, 'verify_session') as mock_verify_session, \
+             patch.object(admin_auth, 'get_session_user') as mock_get_session_user:
             
             # Настройка моков
             mock_users.return_value = [
@@ -69,13 +74,29 @@ class TestAdminPanel:
                 'full_name': 'Иван Иванов'
             })()
             
+            mock_get_user_by_username.return_value = type('User', (), {
+                'id': 2,
+                'telegram_id': 987654321,
+                'role': 'admin',
+                'full_name': 'Admin User'
+            })()
+            
             mock_update.return_value = None
+            mock_change_user_role.return_value = True
+            
+            # Настройка моков аутентификации
+            mock_verify_session.return_value = True
+            mock_get_session_user.return_value = "admin"
             
             yield {
                 'users': mock_users,
                 'passes': mock_passes,
                 'update': mock_update,
-                'get_user': mock_get_user
+                'get_user': mock_get_user,
+                'get_user_by_username': mock_get_user_by_username,
+                'change_user_role': mock_change_user_role,
+                'verify_session': mock_verify_session,
+                'get_session_user': mock_get_session_user
             }
     
     def test_login_page_access(self, client):
@@ -238,13 +259,6 @@ class TestAdminPanel:
         assert admin_auth.verify_password("admin123") is True
         assert admin_auth.verify_password("wrong_password") is False
 
-class TestAdminSecurity:
-    """Тесты безопасности админки"""
-    
-    @pytest.fixture
-    def client(self):
-        """Создание тестового клиента"""
-        return TestClient(app)
     
     def test_password_hashing(self):
         """Тест хэширования паролей"""
@@ -267,8 +281,177 @@ class TestAdminSecurity:
         
         for endpoint in protected_endpoints:
             response = client.get(endpoint, follow_redirects=False)
-            assert response.status_code == 302
-            assert response.headers["location"].startswith("/login")
+        assert response.status_code == 302
+        assert response.headers["location"].startswith("/login")
+
+    def test_change_user_role_success(self, client, mock_db):
+        """Тест успешного изменения роли пользователя"""
+        # Мокаем данные
+        mock_user = User(
+            id=1, telegram_id=123456789, role='resident', full_name='Test User',
+            phone_number='+7900123456', apartment='1A', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        mock_current_admin = User(
+            id=2, telegram_id=987654321, role='admin', full_name='Admin User',
+            phone_number='+7900987654', apartment='2B', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        
+        mock_db['get_user'].return_value = mock_user
+        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['change_user_role'].return_value = True
+        
+        # Авторизуемся
+        login_response = client.post("/login", data={
+            "username": "admin",
+            "password": "admin123"
+        })
+        session_cookie = login_response.cookies.get("admin_session")
+        
+        # Выполняем запрос
+        response = client.post(
+            "/users/1/role",
+            data={"new_role": "security"},
+            cookies={"admin_session": session_cookie}
+        )
+        
+        # Проверяем результат (200 означает успешный редирект и загрузку страницы)
+        assert response.status_code == 200
+        
+        # Проверяем, что методы были вызваны
+        mock_db['get_user_by_username'].assert_called_once_with("admin")
+        mock_db['get_user'].assert_called_once_with(1)
+        mock_db['change_user_role'].assert_called_once_with(1, "security")
+
+    def test_change_user_role_non_admin(self, client, mock_db):
+        """Тест изменения роли не-администратором"""
+        # Мокаем не-админа
+        mock_current_user = User(
+            id=2, telegram_id=987654321, role='resident', full_name='Regular User',
+            phone_number='+7900987654', apartment='2B', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        
+        mock_db['get_user_by_username'].return_value = mock_current_user
+        
+        # Авторизуемся
+        login_response = client.post("/login", data={
+            "username": "admin",
+            "password": "admin123"
+        })
+        session_cookie = login_response.cookies.get("admin_session")
+        
+        # Выполняем запрос
+        response = client.post(
+            "/users/1/role",
+            data={"new_role": "security"},
+            cookies={"admin_session": session_cookie}
+        )
+        
+        # Проверяем результат
+        assert response.status_code == 403
+        
+        # Проверяем, что изменение роли не было вызвано
+        mock_db['change_user_role'].assert_not_called()
+
+    def test_change_user_role_invalid_role(self, client, mock_db):
+        """Тест изменения роли на недопустимую"""
+        mock_user = User(
+            id=1, telegram_id=123456789, role='resident', full_name='Test User',
+            phone_number='+7900123456', apartment='1A', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        mock_current_admin = User(
+            id=2, telegram_id=987654321, role='admin', full_name='Admin User',
+            phone_number='+7900987654', apartment='2B', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        
+        mock_db['get_user'].return_value = mock_user
+        mock_db['get_user_by_username'].return_value = mock_current_admin
+        
+        # Авторизуемся
+        login_response = client.post("/login", data={
+            "username": "admin",
+            "password": "admin123"
+        })
+        session_cookie = login_response.cookies.get("admin_session")
+        
+        # Выполняем запрос с недопустимой ролью
+        response = client.post(
+            "/users/1/role",
+            data={"new_role": "invalid_role"},
+            cookies={"admin_session": session_cookie}
+        )
+        
+        # Проверяем результат
+        assert response.status_code == 400
+        
+        # Проверяем, что изменение роли не было вызвано
+        mock_db['change_user_role'].assert_not_called()
+
+    def test_change_user_role_self_change(self, client, mock_db):
+        """Тест попытки изменения собственной роли"""
+        mock_current_admin = User(
+            id=1, telegram_id=987654321, role='admin', full_name='Admin User',
+            phone_number='+7900987654', apartment='2B', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        
+        mock_db['get_user'].return_value = mock_current_admin
+        mock_db['get_user_by_username'].return_value = mock_current_admin
+        
+        # Авторизуемся
+        login_response = client.post("/login", data={
+            "username": "admin",
+            "password": "admin123"
+        })
+        session_cookie = login_response.cookies.get("admin_session")
+        
+        # Выполняем запрос на изменение собственной роли
+        response = client.post(
+            "/users/1/role",
+            data={"new_role": "resident"},
+            cookies={"admin_session": session_cookie}
+        )
+        
+        # Проверяем результат
+        assert response.status_code == 403
+        
+        # Проверяем, что изменение роли не было вызвано
+        mock_db['change_user_role'].assert_not_called()
+
+    def test_change_user_role_user_not_found(self, client, mock_db):
+        """Тест изменения роли несуществующего пользователя"""
+        mock_current_admin = User(
+            id=2, telegram_id=987654321, role='admin', full_name='Admin User',
+            phone_number='+7900987654', apartment='2B', status='approved',
+            created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
+        )
+        
+        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['get_user'].return_value = None
+        
+        # Авторизуемся
+        login_response = client.post("/login", data={
+            "username": "admin",
+            "password": "admin123"
+        })
+        session_cookie = login_response.cookies.get("admin_session")
+        
+        # Выполняем запрос
+        response = client.post(
+            "/users/999/role",
+            data={"new_role": "security"},
+            cookies={"admin_session": session_cookie}
+        )
+        
+        # Проверяем результат
+        assert response.status_code == 404
+        
+        # Проверяем, что изменение роли не было вызвано
+        mock_db['change_user_role'].assert_not_called()
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

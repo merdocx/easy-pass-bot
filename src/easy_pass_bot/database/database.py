@@ -637,6 +637,61 @@ class Database:
                 
                 return passes, total_count
 
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        """Получить пользователя по username (для админки)"""
+        try:
+            # Для админки username = "admin", ищем пользователя с ролью admin
+            if username == "admin":
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute(
+                        "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at FROM users WHERE role = 'admin' LIMIT 1",
+                        ()
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row:
+                            return User(
+                                id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
+                                phone_number=row[4], apartment=row[5], status=row[6],
+                                created_at=row[7], updated_at=row[8]
+                            )
+            else:
+                # Для других пользователей ищем по full_name
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute(
+                        "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at FROM users WHERE full_name = ?",
+                        (username,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row:
+                            return User(
+                                id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
+                                phone_number=row[4], apartment=row[5], status=row[6],
+                                created_at=row[7], updated_at=row[8]
+                            )
+            return None
+        except Exception as e:
+            logger.error(f"Error getting user by username {username}: {e}")
+            return None
+
+    async def change_user_role(self, user_id: int, new_role: str) -> bool:
+        """Изменить роль пользователя"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (new_role, user_id)
+                )
+                await db.commit()
+                
+                # Инвалидируем кэш
+                cache_service.invalidate_user_cache(user_id)
+                
+                logger.info(f"User {user_id} role changed to {new_role}")
+                return True
+        except Exception as e:
+            logger.error(f"Error changing user {user_id} role to {new_role}: {e}")
+            return False
+
     async def cleanup(self):
         """Очистка ресурсов базы данных"""
         # Закрываем все соединения

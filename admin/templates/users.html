@@ -165,7 +165,7 @@
                             </form>
                             
                             {% elif user.status == 'approved' %}
-                            <!-- Подтвержден: Удалить и Заблокировать -->
+                            <!-- Подтвержден: Удалить, Заблокировать и Изменить роль -->
                             <form method="post" action="/users/{{ user.id }}/delete" class="inline-form">
                                 <button type="submit" class="btn btn-sm btn-danger" title="Удалить"
                                         onclick="return confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить!')">
@@ -176,9 +176,13 @@
                                     onclick="showBlockModal({{ user.id }}, '{{ user.full_name }}')">
                                 <i class="fas fa-ban"></i>
                             </button>
+                            <button type="button" class="btn btn-sm btn-info" title="Изменить роль"
+                                    onclick="showRoleModal({{ user.id }}, '{{ user.full_name }}', '{{ user.role }}')">
+                                <i class="fas fa-user-cog"></i>
+                            </button>
                             
                             {% elif user.status == 'blocked' %}
-                            <!-- Заблокирован: Разблокировать и Удалить -->
+                            <!-- Заблокирован: Разблокировать, Удалить и Изменить роль -->
                             <form method="post" action="/users/{{ user.id }}/unblock" class="inline-form">
                                 <button type="submit" class="btn btn-sm btn-success" title="Разблокировать">
                                     <i class="fas fa-unlock"></i>
@@ -190,6 +194,10 @@
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>
+                            <button type="button" class="btn btn-sm btn-info" title="Изменить роль"
+                                    onclick="showRoleModal({{ user.id }}, '{{ user.full_name }}', '{{ user.role }}')">
+                                <i class="fas fa-user-cog"></i>
+                            </button>
                             {% endif %}
                         </td>
                     </tr>
@@ -239,6 +247,41 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeBlockModal()">Отмена</button>
                 <button type="submit" class="btn btn-warning">Заблокировать</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно для изменения роли -->
+<div id="roleModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Изменение роли пользователя</h3>
+            <span class="close" onclick="closeRoleModal()">&times;</span>
+        </div>
+        <form id="roleForm" method="post">
+            <div class="modal-body">
+                <p>Пользователь: <strong id="roleUserName"></strong></p>
+                <p>Текущая роль: <strong id="currentRole"></strong></p>
+                
+                <div class="form-group">
+                    <label for="newRole">Новая роль:</label>
+                    <select id="newRole" name="new_role" required>
+                        <option value="">Выберите роль</option>
+                        <option value="resident">Житель</option>
+                        <option value="security">Охрана</option>
+                        <option value="admin">Администратор</option>
+                    </select>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Внимание!</strong> Изменение роли повлияет на права доступа пользователя в системе.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeRoleModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Изменить роль</button>
             </div>
         </form>
     </div>
@@ -303,10 +346,60 @@ function closeBlockModal() {
 
 // Закрытие модального окна при клике вне его
 window.onclick = function(event) {
-    const modal = document.getElementById('blockModal');
-    if (event.target === modal) {
+    const blockModal = document.getElementById('blockModal');
+    const roleModal = document.getElementById('roleModal');
+    
+    if (event.target === blockModal) {
         closeBlockModal();
+    } else if (event.target === roleModal) {
+        closeRoleModal();
     }
+}
+
+// Функции для модального окна изменения роли
+function showRoleModal(userId, userName, currentRole) {
+    const modal = document.getElementById('roleModal');
+    const form = document.getElementById('roleForm');
+    const userNameElement = document.getElementById('roleUserName');
+    const currentRoleElement = document.getElementById('currentRole');
+    const newRoleSelect = document.getElementById('newRole');
+    
+    userNameElement.textContent = userName;
+    
+    // Показываем текущую роль в понятном формате
+    const roleNames = {
+        'resident': 'Житель',
+        'security': 'Охрана', 
+        'admin': 'Администратор'
+    };
+    currentRoleElement.textContent = roleNames[currentRole] || currentRole;
+    
+    form.action = `/users/${userId}/role`;
+    
+    // Сбрасываем выбор новой роли
+    newRoleSelect.value = '';
+    
+    // Показываем модальное окно
+    modal.style.display = 'flex';
+    
+    // Предотвратить прокрутку фона
+    document.body.style.overflow = 'hidden';
+}
+
+function closeRoleModal() {
+    const modal = document.getElementById('roleModal');
+    
+    // Добавляем класс closing для анимации закрытия
+    modal.classList.add('closing');
+    
+    // Ждем завершения анимации перед скрытием
+    setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('closing');
+        document.getElementById('roleForm').reset();
+        // Восстанавливаем прокрутку фона
+        document.body.style.overflow = 'auto';
+    }, 300);
 }
 
 // Поиск и Infinite Scroll для пользователей
@@ -485,6 +578,10 @@ function createUserRow(user) {
             <button class="btn btn-sm btn-warning" onclick="openBlockModal(${user.id}, '${user.full_name}')" title="Заблокировать">
                 <i class="fas fa-ban"></i>
             </button>
+            <button type="button" class="btn btn-sm btn-info" title="Изменить роль"
+                    onclick="showRoleModal(${user.id}, '${user.full_name}', '${user.role}')">
+                <i class="fas fa-user-cog"></i>
+            </button>
         `;
     } else if (user.status === 'blocked') {
         actionsHtml = `
@@ -499,6 +596,10 @@ function createUserRow(user) {
                     <i class="fas fa-trash"></i>
                 </button>
             </form>
+            <button type="button" class="btn btn-sm btn-info" title="Изменить роль"
+                    onclick="showRoleModal(${user.id}, '${user.full_name}', '${user.role}')">
+                <i class="fas fa-user-cog"></i>
+            </button>
         `;
     }
     

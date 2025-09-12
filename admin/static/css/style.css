@@ -1336,3 +1336,30 @@ body {
     }
 }
 
+/* ===========================================
+   ALERT СООБЩЕНИЯ
+   =========================================== */
+
+.alert {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.alert-warning {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #856404;
+}
+
+.alert i {
+    margin-right: 0.5rem;
+}
+
+.alert strong {
+    font-weight: 600;
+}
+
