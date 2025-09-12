@@ -273,12 +273,31 @@ function showBlockModal(userId, userName) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('blockedUntil').min = tomorrow.toISOString().split('T')[0];
     
-    modal.style.display = 'block';
+    // Показать модальное окно с анимацией
+    modal.style.display = 'flex';
+    // Небольшая задержка для плавной анимации
+    setTimeout(() => {
+        modal.classList.add('show');
+    }, 10);
+    
+    // Предотвратить прокрутку фона
+    document.body.style.overflow = 'hidden';
 }
 
 function closeBlockModal() {
-    document.getElementById('blockModal').style.display = 'none';
-    document.getElementById('blockForm').reset();
+    const modal = document.getElementById('blockModal');
+    
+    // Добавляем класс closing для анимации закрытия
+    modal.classList.add('closing');
+    
+    // Ждем завершения анимации перед скрытием
+    setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('closing');
+        document.getElementById('blockForm').reset();
+        // Восстанавливаем прокрутку фона
+        document.body.style.overflow = 'auto';
+    }, 300);
 }
 
 // Закрытие модального окна при клике вне его
