@@ -358,6 +358,38 @@ body {
     flex-wrap: wrap;
 }
 
+.filter-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.search-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.search-status i {
+    font-size: 0.875rem;
+}
+
+.search-status .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .filter-group {
     display: flex;
     flex-direction: column;
@@ -622,6 +654,17 @@ body {
     
     .filter-group:first-child {
         min-width: auto;
+    }
+    
+    .filter-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+    
+    .search-status {
+        justify-content: center;
+        text-align: center;
     }
     
     .table-container {

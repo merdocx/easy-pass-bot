@@ -29,6 +29,26 @@ app = FastAPI(title="Easy Pass Admin Panel", version="1.0.0")
 app.mount("/static", StaticFiles(directory="/root/easy_pass_bot/admin/static"), name="static")
 templates = Jinja2Templates(directory="/root/easy_pass_bot/admin/templates")
 
+# Защищенные маршруты (требуют авторизации)
+PROTECTED_ROUTES = {
+    "/dashboard", "/users", "/passes", "/api/users", "/api/passes"
+}
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Middleware для автоматического редиректа на логин"""
+    # Проверяем только GET запросы к защищенным маршрутам
+    if request.method == "GET" and request.url.path in PROTECTED_ROUTES:
+        user = await get_current_user(request)
+        if not user:
+            # Для GET запросов сохраняем текущий URL
+            current_url = str(request.url)
+            redirect_url = f"/login?redirect={current_url}"
+            return RedirectResponse(url=redirect_url, status_code=302)
+    
+    response = await call_next(request)
+    return response
+
 # Инициализация базы данных
 db = Database('/root/easy_pass_bot/database/easy_pass.db')
 
@@ -84,8 +104,8 @@ async def get_current_user(request: Request) -> Optional[str]:
         return None
     return admin_auth.get_session_user(session_id)
 
-async def require_auth(request: Request):
-    """Проверка авторизации"""
+async def require_auth_dependency(request: Request):
+    """Проверка авторизации для использования в Depends"""
     user = await get_current_user(request)
     if not user:
         raise HTTPException(
@@ -94,20 +114,65 @@ async def require_auth(request: Request):
         )
     return user
 
+async def require_auth_redirect(request: Request):
+    """Проверка авторизации с автоматическим редиректом"""
+    user = await get_current_user(request)
+    if not user:
+        # Получаем текущий URL для редиректа после авторизации
+        current_url = str(request.url)
+        redirect_url = f"/login?redirect={current_url}"
+        return RedirectResponse(url=redirect_url, status_code=302)
+    return user
+
+async def check_auth_for_post(request: Request):
+    """Проверка авторизации для POST запросов с редиректом"""
+    user = await get_current_user(request)
+    if not user:
+        # Для POST запросов редиректим на соответствующую GET страницу
+        if request.url.path.startswith("/users"):
+            redirect_url = "/login?redirect=http://89.110.96.90:8080/users"
+        elif request.url.path.startswith("/passes"):
+            redirect_url = "/login?redirect=http://89.110.96.90:8080/passes"
+        else:
+            redirect_url = "/login?redirect=http://89.110.96.90:8080/dashboard"
+        return RedirectResponse(url=redirect_url, status_code=302)
+    return user
+
 @app.get("/", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Страница авторизации"""
     user = await get_current_user(request)
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request})
+    
+    # Получаем redirect параметр
+    redirect_url = request.query_params.get("redirect", "/dashboard")
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "redirect_url": redirect_url
+    })
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page_alt(request: Request):
+    """Альтернативная страница авторизации"""
+    user = await get_current_user(request)
+    if user:
+        return RedirectResponse(url="/dashboard", status_code=302)
+    
+    # Получаем redirect параметр
+    redirect_url = request.query_params.get("redirect", "/dashboard")
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "redirect_url": redirect_url
+    })
 
 @app.post("/login")
-async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(...), password: str = Form(...), redirect_url: str = Form("/dashboard")):
     """Обработка авторизации"""
+    
     if username == "admin" and admin_auth.verify_password(password):
         session_id = admin_auth.create_session(username)
-        response = RedirectResponse(url="/dashboard", status_code=302)
+        response = RedirectResponse(url=redirect_url, status_code=302)
         response.set_cookie(
             key="admin_session",
             value=session_id,
@@ -121,7 +186,11 @@ async def login(request: Request, username: str = Form(...), password: str = For
     else:
         return templates.TemplateResponse(
             "login.html", 
-            {"request": request, "error": "Неверные учетные данные"}
+            {
+                "request": request, 
+                "error": "Неверные учетные данные",
+                "redirect_url": redirect_url
+            }
         )
 
 @app.get("/logout")
@@ -137,8 +206,16 @@ async def logout(request: Request):
     return response
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, current_user: str = Depends(require_auth)):
+async def dashboard(request: Request, current_user: str = Depends(require_auth_dependency)):
     """Главная страница админки"""
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "current_user": current_user
+    })
+
+@app.post("/dashboard", response_class=HTMLResponse)
+async def dashboard_post(request: Request, current_user: str = Depends(require_auth_dependency)):
+    """Обработка POST запросов на dashboard"""
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "current_user": current_user
@@ -147,7 +224,7 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
 @app.get("/users", response_class=HTMLResponse)
 async def users_page(
     request: Request, 
-    current_user: str = Depends(require_auth),
+    current_user: str = Depends(require_auth_dependency),
     search: Optional[str] = None,
     status_filter: Optional[str] = None,
     role_filter: Optional[str] = None
@@ -197,10 +274,15 @@ async def users_page(
 async def update_user_status(
     request: Request,
     user_id: int,
-    status: str = Form(...),
-    current_user: str = Depends(require_auth)
+    status: str = Form(...)
 ):
     """Обновление статуса пользователя"""
+    # Проверка аутентификации с редиректом
+    auth_result = await check_auth_for_post(request)
+    if isinstance(auth_result, RedirectResponse):
+        return auth_result
+    current_user = auth_result
+    
     try:
         if status not in ['pending', 'approved', 'rejected']:
             raise HTTPException(status_code=400, detail="Неверный статус")
@@ -216,7 +298,7 @@ async def update_user_status(
 @app.get("/passes", response_class=HTMLResponse)
 async def passes_page(
     request: Request,
-    current_user: str = Depends(require_auth),
+    current_user: str = Depends(require_auth_dependency),
     search: Optional[str] = None,
     status_filter: Optional[str] = None
 ):
@@ -262,7 +344,7 @@ async def passes_page(
         raise HTTPException(status_code=500, detail="Ошибка загрузки страницы пропусков")
 
 @app.get("/api/users")
-async def api_get_users(current_user: str = Depends(require_auth)):
+async def api_get_users(current_user: str = Depends(require_auth_dependency)):
     """API для получения списка пользователей"""
     try:
         users = await db.get_all_users()
@@ -272,7 +354,7 @@ async def api_get_users(current_user: str = Depends(require_auth)):
         raise HTTPException(status_code=500, detail="Ошибка получения пользователей")
 
 @app.get("/api/passes")
-async def api_get_passes(current_user: str = Depends(require_auth)):
+async def api_get_passes(current_user: str = Depends(require_auth_dependency)):
     """API для получения списка пропусков"""
     try:
         passes = await db.get_all_passes()
@@ -286,10 +368,15 @@ async def block_user(
     request: Request,
     user_id: int,
     blocked_until: str = Form(...),
-    block_reason: str = Form(...),
-    current_user: str = Depends(require_auth)
+    block_reason: str = Form(...)
 ):
     """Блокировка пользователя"""
+    # Проверка аутентификации с редиректом
+    auth_result = await check_auth_for_post(request)
+    if isinstance(auth_result, RedirectResponse):
+        return auth_result
+    current_user = auth_result
+    
     try:
         await db.block_user(user_id, blocked_until, block_reason)
         logger.info(f"Admin {current_user} blocked user {user_id} until {blocked_until}")
@@ -301,10 +388,15 @@ async def block_user(
 @app.post("/users/{user_id}/unblock")
 async def unblock_user(
     request: Request,
-    user_id: int,
-    current_user: str = Depends(require_auth)
+    user_id: int
 ):
     """Разблокировка пользователя"""
+    # Проверка аутентификации с редиректом
+    auth_result = await check_auth_for_post(request)
+    if isinstance(auth_result, RedirectResponse):
+        return auth_result
+    current_user = auth_result
+    
     try:
         await db.unblock_user(user_id)
         logger.info(f"Admin {current_user} unblocked user {user_id}")
@@ -316,10 +408,15 @@ async def unblock_user(
 @app.post("/users/{user_id}/delete")
 async def delete_user(
     request: Request,
-    user_id: int,
-    current_user: str = Depends(require_auth)
+    user_id: int
 ):
     """Удаление пользователя"""
+    # Проверка аутентификации с редиректом
+    auth_result = await check_auth_for_post(request)
+    if isinstance(auth_result, RedirectResponse):
+        return auth_result
+    current_user = auth_result
+    
     try:
         await db.delete_user(user_id)
         logger.info(f"Admin {current_user} deleted user {user_id}")

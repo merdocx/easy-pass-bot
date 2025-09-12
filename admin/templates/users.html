@@ -59,13 +59,13 @@
         
         <!-- Фильтры и поиск -->
         <div class="filters-section">
-            <form method="get" class="filters-form">
+            <form method="get" class="filters-form" id="searchForm">
                 <div class="filter-group">
                     <input type="text" name="search" placeholder="Поиск по имени, ID или телефону..." 
-                           value="{{ search }}" class="search-input">
+                           value="{{ search }}" class="search-input" id="searchInput">
                 </div>
                 <div class="filter-group">
-                    <select name="status_filter" class="filter-select">
+                    <select name="status_filter" class="filter-select" id="statusFilter">
                         <option value="">Все статусы</option>
                         <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидают</option>
                         <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Подтверждены</option>
@@ -74,21 +74,23 @@
                     </select>
                 </div>
                 <div class="filter-group">
-                    <select name="role_filter" class="filter-select">
+                    <select name="role_filter" class="filter-select" id="roleFilter">
                         <option value="">Все роли</option>
                         <option value="resident" {% if role_filter == 'resident' %}selected{% endif %}>Жители</option>
                         <option value="security" {% if role_filter == 'security' %}selected{% endif %}>Охрана</option>
                         <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администраторы</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-search"></i>
-                    Найти
-                </button>
-                <a href="/users" class="btn btn-secondary">
-                    <i class="fas fa-times"></i>
-                    Сбросить
-                </a>
+                <div class="filter-actions">
+                    <div class="search-status" id="searchStatus">
+                        <i class="fas fa-search"></i>
+                        <span>Поиск автоматический</span>
+                    </div>
+                    <a href="/users" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                        Сбросить
+                    </a>
+                </div>
             </form>
         </div>
         
@@ -307,5 +309,38 @@ window.onclick = function(event) {
         closeBlockModal();
     }
 }
+
+// Автоматический поиск с debounce
+let searchTimeout;
+function performSearch() {
+    const form = document.getElementById('searchForm');
+    const searchStatus = document.getElementById('searchStatus');
+    
+    // Показываем индикатор поиска
+    searchStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Поиск...</span>';
+    
+    // Отправляем форму
+    form.submit();
+}
+
+// Debounce функция для поиска
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(performSearch, 500); // 500ms задержка
+}
+
+// Обработчики событий для автоматического поиска
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const roleFilter = document.getElementById('roleFilter');
+    
+    // Поиск по вводу текста
+    searchInput.addEventListener('input', debounceSearch);
+    
+    // Поиск при изменении фильтров
+    statusFilter.addEventListener('change', performSearch);
+    roleFilter.addEventListener('change', performSearch);
+});
 </script>
 {% endblock %}

@@ -55,27 +55,29 @@
         
         <!-- Фильтры и поиск -->
         <div class="filters-section">
-            <form method="get" class="filters-form">
+            <form method="get" class="filters-form" id="searchForm">
                 <div class="filter-group">
                     <input type="text" name="search" placeholder="Поиск по номеру автомобиля..." 
-                           value="{{ search }}" class="search-input">
+                           value="{{ search }}" class="search-input" id="searchInput">
                 </div>
                 <div class="filter-group">
-                    <select name="status_filter" class="filter-select">
+                    <select name="status_filter" class="filter-select" id="statusFilter">
                         <option value="">Все статусы</option>
                         <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
                         <option value="used" {% if status_filter == 'used' %}selected{% endif %}>Использованы</option>
                         <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Отменены</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-search"></i>
-                    Найти
-                </button>
-                <a href="/passes" class="btn btn-secondary">
-                    <i class="fas fa-times"></i>
-                    Сбросить
-                </a>
+                <div class="filter-actions">
+                    <div class="search-status" id="searchStatus">
+                        <i class="fas fa-search"></i>
+                        <span>Поиск автоматический</span>
+                    </div>
+                    <a href="/passes" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                        Сбросить
+                    </a>
+                </div>
             </form>
         </div>
         
@@ -176,4 +178,37 @@
         </div>
     </main>
 </div>
+
+<script>
+// Автоматический поиск с debounce
+let searchTimeout;
+function performSearch() {
+    const form = document.getElementById('searchForm');
+    const searchStatus = document.getElementById('searchStatus');
+    
+    // Показываем индикатор поиска
+    searchStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Поиск...</span>';
+    
+    // Отправляем форму
+    form.submit();
+}
+
+// Debounce функция для поиска
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(performSearch, 500); // 500ms задержка
+}
+
+// Обработчики событий для автоматического поиска
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    
+    // Поиск по вводу текста
+    searchInput.addEventListener('input', debounceSearch);
+    
+    // Поиск при изменении фильтров
+    statusFilter.addEventListener('change', performSearch);
+});
+</script>
 {% endblock %}
