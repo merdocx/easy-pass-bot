@@ -30,13 +30,16 @@ class InputValidator:
         """
         if not phone or not isinstance(phone, str):
             return False, "Номер телефона не может быть пустым"
-        # Убираем все пробелы, дефисы и скобки
-        clean_phone = re.sub(r'[\s\-\(\)]', '', phone.strip())
-        if len(clean_phone) > cls.MAX_PHONE_LENGTH:
-            return False, f"Номер телефона слишком длинный (максимум {cls.MAX_PHONE_LENGTH} символов)"
-        if not re.match(cls.PHONE_PATTERN, clean_phone):
-            return False, "Неверный формат номера телефона. Используйте формат: +7XXXXXXXXXX"
-        return True, None
+        
+        # Используем нормализатор для проверки формата
+        from ..utils.phone_normalizer import validate_phone_format, is_russian_phone
+        
+        # Проверяем, является ли номер российским и может ли быть нормализован
+        if is_russian_phone(phone) and validate_phone_format(phone):
+            return True, None
+        
+        # Если это не российский номер, отклоняем его
+        return False, "Поддерживаются только российские номера телефонов. Используйте формат: +7XXXXXXXXXX или 8XXXXXXXXXX"
     @classmethod
     def validate_car_number(cls, car_number: str) -> Tuple[bool, Optional[str]]:
         """
@@ -143,9 +146,13 @@ class InputValidator:
         apartment_valid, apartment_error = cls.validate_apartment(apartment)
         if not apartment_valid:
             return False, apartment_error, None
+        # Нормализуем номер телефона
+        from ..utils.phone_normalizer import normalize_phone_number
+        normalized_phone = normalize_phone_number(phone)
+        
         return True, None, {
             'full_name': full_name,
-            'phone_number': phone,
+            'phone_number': normalized_phone,
             'apartment': apartment
         }
     @classmethod
