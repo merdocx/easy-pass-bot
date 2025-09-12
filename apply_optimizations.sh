@@ -136,3 +136,7 @@ echo "- Запуск тестов: pytest"
 echo "- Проверка кода: flake8 src/"
 echo "- Форматирование: black src/"
 echo "- Проверка безопасности: safety check"
+
+
+
+

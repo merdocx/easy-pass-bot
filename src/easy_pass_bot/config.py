@@ -14,7 +14,8 @@ ROLES = {
 USER_STATUSES = {
     'PENDING': 'pending',
     'APPROVED': 'approved',
-    'REJECTED': 'rejected'
+    'REJECTED': 'rejected',
+    'BLOCKED': 'blocked'
 }
 # Статусы пропусков
 PASS_STATUSES = {

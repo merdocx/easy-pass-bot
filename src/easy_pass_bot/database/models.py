@@ -12,6 +12,8 @@ class User:
     phone_number: str = ''
     apartment: Optional[str] = None
     status: str = 'pending'
+    blocked_until: Optional[str] = None
+    block_reason: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

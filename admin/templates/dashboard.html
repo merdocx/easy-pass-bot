@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Панель управления - Easy Pass Admin{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="header-left">
+            <h1><i class="fas fa-tachometer-alt"></i> Панель управления</h1>
+            <p>Добро пожаловать, {{ current_user }}!</p>
+        </div>
+        <div class="header-right">
+            <a href="/logout" class="btn btn-secondary">
+                <i class="fas fa-sign-out-alt"></i>
+                Выйти
+            </a>
+        </div>
+    </header>
+    
+    <nav class="dashboard-nav">
+        <a href="/dashboard" class="nav-item active">
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Главная</span>
+        </a>
+        <a href="/users" class="nav-item">
+            <i class="fas fa-users"></i>
+            <span>Пользователи</span>
+        </a>
+        <a href="/passes" class="nav-item">
+            <i class="fas fa-car"></i>
+            <span>Пропуски</span>
+        </a>
+    </nav>
+    
+    <main class="dashboard-content">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Пользователи</h3>
+                    <p>Управление жителями и персоналом</p>
+                    <a href="/users" class="btn btn-outline">Перейти</a>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-car"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Пропуски</h3>
+                    <p>Просмотр всех пропусков</p>
+                    <a href="/passes" class="btn btn-outline">Перейти</a>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Аналитика</h3>
+                    <p>Статистика использования</p>
+                    <button class="btn btn-outline" onclick="showComingSoon()">Скоро</button>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Настройки</h3>
+                    <p>Конфигурация системы</p>
+                    <button class="btn btn-outline" onclick="showComingSoon()">Скоро</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="recent-activity">
+            <h2><i class="fas fa-clock"></i> Последняя активность</h2>
+            <div class="activity-list">
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p>Система запущена и готова к работе</p>
+                        <small>Сегодня</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+function showComingSoon() {
+    alert('Эта функция будет доступна в следующих версиях');
+}
+</script>
+{% endblock %}

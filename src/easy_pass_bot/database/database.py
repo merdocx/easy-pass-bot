@@ -141,7 +141,7 @@ class Database:
         """Внутренний метод получения пользователя по Telegram ID"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users WHERE telegram_id = ?
             """, (telegram_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -149,14 +149,15 @@ class Database:
                     return User(
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
-                        created_at=row[7], updated_at=row[8]
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
                     )
                 return None
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Получение пользователя по ID"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users WHERE id = ?
             """, (user_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -164,7 +165,8 @@ class Database:
                     return User(
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
-                        created_at=row[7], updated_at=row[8]
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
                     )
                 return None
     async def update_user_status(self, user_id: int, status: str):
@@ -174,11 +176,36 @@ class Database:
                 UPDATE users SET status = ?, updated_at = ? WHERE id = ?
             """, (status, datetime.now(), user_id))
             await db.commit()
+    
+    async def block_user(self, user_id: int, blocked_until: str, block_reason: str):
+        """Блокировка пользователя"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE users SET status = 'blocked', blocked_until = ?, block_reason = ?, updated_at = ? WHERE id = ?
+            """, (blocked_until, block_reason, datetime.now(), user_id))
+            await db.commit()
+    
+    async def unblock_user(self, user_id: int):
+        """Разблокировка пользователя"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                UPDATE users SET status = 'approved', blocked_until = NULL, block_reason = NULL, updated_at = ? WHERE id = ?
+            """, (datetime.now(), user_id))
+            await db.commit()
+    
+    async def delete_user(self, user_id: int):
+        """Удаление пользователя"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Сначала удаляем все пропуски пользователя
+            await db.execute("DELETE FROM passes WHERE user_id = ?", (user_id,))
+            # Затем удаляем самого пользователя
+            await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            await db.commit()
     async def get_admin_users(self) -> List[User]:
         """Получение всех администраторов"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users WHERE role = 'admin' AND status = 'approved'
             """) as cursor:
                 rows = await cursor.fetchall()
@@ -186,14 +213,15 @@ class Database:
                     User(
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
-                        created_at=row[7], updated_at=row[8]
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
                     ) for row in rows
                 ]
     async def get_pending_users(self) -> List[User]:
         """Получение пользователей на модерации"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users WHERE role = 'resident' AND status = 'pending'
                 ORDER BY created_at ASC
             """) as cursor:
@@ -202,14 +230,15 @@ class Database:
                     User(
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
-                        created_at=row[7], updated_at=row[8]
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
                     ) for row in rows
                 ]
     async def get_all_users(self) -> List[User]:
         """Получение всех пользователей"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users
                 ORDER BY created_at DESC
             """) as cursor:
@@ -218,7 +247,8 @@ class Database:
                     User(
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
-                        created_at=row[7], updated_at=row[8]
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
                     ) for row in rows
                 ]
     async def create_pass(self, pass_obj: Pass) -> int:

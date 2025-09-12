@@ -50,7 +50,24 @@ class PassService(BaseService):
                 raise ValidationError(f"User with ID {user_id} not found")
             
             if user.status != USER_STATUSES['APPROVED']:
-                raise ValidationError("User must be approved to create passes")
+                if user.status == USER_STATUSES['BLOCKED']:
+                    # Проверяем, не истекла ли блокировка
+                    if user.blocked_until:
+                        from datetime import datetime
+                        try:
+                            blocked_until = datetime.fromisoformat(user.blocked_until)
+                            if datetime.now() < blocked_until:
+                                raise ValidationError(f"Пользователь заблокирован до {user.blocked_until}. Причина: {user.block_reason or 'Не указана'}")
+                            else:
+                                # Блокировка истекла, можно создать пропуск
+                                pass
+                        except ValueError:
+                            # Если дата в неправильном формате, считаем заблокированным
+                            raise ValidationError(f"Пользователь заблокирован. Причина: {user.block_reason or 'Не указана'}")
+                    else:
+                        raise ValidationError(f"Пользователь заблокирован. Причина: {user.block_reason or 'Не указана'}")
+                else:
+                    raise ValidationError("User must be approved to create passes")
             
             # Нормализуем номер автомобиля
             car_number = car_number.upper().strip()
