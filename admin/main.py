@@ -329,11 +329,27 @@ async def passes_page(
 async def api_get_users(
     current_user: str = Depends(require_auth_dependency),
     offset: int = 0,
-    limit: int = 20
+    limit: int = 20,
+    search: str = None
 ):
-    """API для получения списка пользователей с пагинацией"""
+    """API для получения списка пользователей с пагинацией и поиском"""
     try:
         users = await db.get_all_users()
+        
+        # Применяем поиск если указан
+        if search and search.strip():
+            search_term = search.strip().lower()
+            filtered_users = []
+            for user in users:
+                # Поиск по ФИО, телефону, квартире, Telegram ID
+                if (search_term in user.full_name.lower() or
+                    search_term in user.phone_number.lower() or
+                    search_term in (user.apartment or "").lower() or
+                    search_term in str(user.telegram_id) or
+                    search_term in str(user.id)):
+                    filtered_users.append(user)
+            users = filtered_users
+        
         total_count = len(users)
         
         # Применяем пагинацию
@@ -342,7 +358,8 @@ async def api_get_users(
         return {
             "users": [user.__dict__ for user in paginated_users],
             "total_count": total_count,
-            "has_more": offset + limit < total_count
+            "has_more": offset + limit < total_count,
+            "search_term": search
         }
     except Exception as e:
         logger.error(f"Error getting users via API: {e}")
@@ -352,11 +369,32 @@ async def api_get_users(
 async def api_get_passes(
     current_user: str = Depends(require_auth_dependency),
     offset: int = 0,
-    limit: int = 20
+    limit: int = 20,
+    search: str = None
 ):
-    """API для получения списка пропусков с пагинацией"""
+    """API для получения списка пропусков с пагинацией и поиском"""
     try:
         passes = await db.get_all_passes()
+        
+        # Применяем поиск если указан
+        if search and search.strip():
+            search_term = search.strip().lower()
+            filtered_passes = []
+            for pass_obj in passes:
+                # Получаем информацию о пользователе для поиска
+                user = await db.get_user_by_id(pass_obj.user_id)
+                
+                # Поиск по номеру автомобиля, ФИО владельца, телефону, квартире, ID пропуска
+                if (search_term in pass_obj.car_number.lower() or
+                    search_term in str(pass_obj.id) or
+                    (user and (
+                        search_term in user.full_name.lower() or
+                        search_term in user.phone_number.lower() or
+                        search_term in (user.apartment or "").lower()
+                    ))):
+                    filtered_passes.append(pass_obj)
+            passes = filtered_passes
+        
         total_count = len(passes)
         
         # Применяем пагинацию
@@ -374,7 +412,8 @@ async def api_get_passes(
         return {
             "passes_with_users": passes_with_users,
             "total_count": total_count,
-            "has_more": offset + limit < total_count
+            "has_more": offset + limit < total_count,
+            "search_term": search
         }
     except Exception as e:
         logger.error(f"Error getting passes via API: {e}")

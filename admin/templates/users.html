@@ -58,6 +58,21 @@
             </div>
         </div>
         
+        <!-- Поиск -->
+        <div class="search-container">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="search-input" placeholder="Поиск по ФИО, телефону, квартире, Telegram ID или ID пользователя..." 
+                       value="">
+                <button type="button" id="clear-search" class="clear-search-btn" title="Очистить поиск" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="search-info" id="search-info" style="display: none;">
+                <span id="search-results-count">0</span> результатов найдено
+                <button type="button" id="clear-search-results" class="clear-search-btn-small">Очистить</button>
+            </div>
+        </div>
         
         <!-- Таблица пользователей -->
         <div class="table-container">
@@ -110,7 +125,20 @@
                                 {% endif %}
                             </span>
                         </td>
-                        <td>{{ user.created_at if user.created_at else '-' }}</td>
+                        <td>
+                            {% if user.created_at %}
+                                {% set date_str = user.created_at|string %}
+                                {% if ' ' in date_str %}
+                                    {{ date_str.split(' ')[0] }} {{ date_str.split(' ')[1].split(':')[0] }}:{{ date_str.split(' ')[1].split(':')[1] }}
+                                {% elif 'T' in date_str %}
+                                    {{ date_str.split('T')[0] }} {{ date_str.split('T')[1].split(':')[0] }}:{{ date_str.split('T')[1].split(':')[1] }}
+                                {% else %}
+                                    {{ date_str }}
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                         <td class="actions">
                             {% if user.status == 'pending' %}
                             <!-- Ожидает: Принять и Отклонить -->
@@ -281,13 +309,105 @@ window.onclick = function(event) {
     }
 }
 
-// Infinite Scroll для пользователей
+// Поиск и Infinite Scroll для пользователей
 let isLoading = false;
 let currentOffset = 20; // Начинаем с 20, так как первые 20 уже загружены
 let hasMoreData = {{ has_more|tojson }}; // Переменная из шаблона
+let currentSearchTerm = ''; // Текущий поисковый запрос
+let isSearchMode = false; // Режим поиска
+
+// Функция форматирования даты
+function formatDateTime(dateString) {
+    if (!dateString) return '-';
+    
+    let dateStr = dateString.toString();
+    
+    // Обработка формата "2025-09-11T16:45:28.541550"
+    if (dateStr.includes('T')) {
+        const [date, time] = dateStr.split('T');
+        const timeOnly = time.split('.')[0]; // Убираем микросекунды
+        const [hours, minutes] = timeOnly.split(':');
+        return `${date} ${hours}:${minutes}`;
+    }
+    
+    // Обработка формата "2025-09-11 16:45:28"
+    if (dateStr.includes(' ')) {
+        const [date, time] = dateStr.split(' ');
+        const [hours, minutes] = time.split(':');
+        return `${date} ${hours}:${minutes}`;
+    }
+    
+    return dateStr; // Возвращаем как есть, если формат неизвестен
+}
+
+// Поиск пользователей
+async function searchUsers(searchTerm) {
+    if (!searchTerm || !searchTerm.trim()) {
+        // Если поиск пустой, показываем все пользователи
+        clearSearch();
+        return;
+    }
+    
+    currentSearchTerm = searchTerm.trim();
+    isSearchMode = true;
+    currentOffset = 0; // Сбрасываем offset для поиска
+    
+    // Очищаем таблицу
+    const tableBody = document.querySelector('.data-table tbody');
+    tableBody.innerHTML = '';
+    
+    // Показываем индикатор загрузки
+    const loadingIndicator = document.getElementById('loading-indicator');
+    loadingIndicator.style.display = 'flex';
+    
+    try {
+        const response = await fetch(`/api/users?offset=0&limit=100&search=${encodeURIComponent(currentSearchTerm)}`);
+        const data = await response.json();
+        
+        if (data.users && data.users.length > 0) {
+            data.users.forEach(user => {
+                const row = createUserRow(user);
+                tableBody.appendChild(row);
+            });
+            
+            // Обновляем информацию о результатах поиска
+            document.getElementById('search-results-count').textContent = data.total_count;
+            document.getElementById('search-info').style.display = 'block';
+            
+            currentOffset = data.users.length;
+            hasMoreData = data.has_more;
+        } else {
+            // Показываем сообщение о том, что ничего не найдено
+            tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #666;">По вашему запросу ничего не найдено</td></tr>';
+            document.getElementById('search-info').style.display = 'none';
+            hasMoreData = false;
+        }
+    } catch (error) {
+        console.error('Ошибка поиска пользователей:', error);
+        tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: #dc3545;">Ошибка при выполнении поиска</td></tr>';
+    } finally {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+// Очистка поиска
+function clearSearch() {
+    currentSearchTerm = '';
+    isSearchMode = false;
+    currentOffset = 20;
+    hasMoreData = {{ has_more|tojson }};
+    
+    // Очищаем поле поиска
+    document.getElementById('search-input').value = '';
+    document.getElementById('clear-search').style.display = 'none';
+    document.getElementById('search-info').style.display = 'none';
+    
+    // Перезагружаем страницу для показа всех пользователей
+    window.location.reload();
+}
 
 async function loadMoreUsers() {
-    if (isLoading || !hasMoreData) return;
+    if (isLoading || !hasMoreData || isSearchMode) return; // Не подгружаем в режиме поиска
     
     isLoading = true;
     const loadingIndicator = document.getElementById('loading-indicator');
@@ -390,7 +510,7 @@ function createUserRow(user) {
         <td>${user.apartment || '-'}</td>
         <td>${roleHtml}</td>
         <td>${statusHtml}</td>
-        <td>${user.created_at || '-'}</td>
+        <td>${formatDateTime(user.created_at)}</td>
         <td class="actions">${actionsHtml}</td>
     `;
     
@@ -418,6 +538,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                 }
             }
+        }
+    });
+    
+    // Обработчики для поиска
+    const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const clearSearchResultsBtn = document.getElementById('clear-search-results');
+    
+    let searchTimeout;
+    
+    // Поиск с задержкой (debounce)
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const value = this.value;
+        
+        if (value.trim()) {
+            clearSearchBtn.style.display = 'block';
+            searchTimeout = setTimeout(() => {
+                searchUsers(value);
+            }, 500); // Задержка 500ms
+        } else {
+            clearSearchBtn.style.display = 'none';
+            clearSearch();
+        }
+    });
+    
+    // Очистка поиска по кнопке
+    clearSearchBtn.addEventListener('click', clearSearch);
+    clearSearchResultsBtn.addEventListener('click', clearSearch);
+    
+    // Очистка поиска по Escape
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            clearSearch();
         }
     });
 });

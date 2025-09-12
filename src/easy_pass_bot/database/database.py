@@ -1,7 +1,7 @@
 import aiosqlite
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from .models import User, Pass
 from ..config import DATABASE_PATH, PASS_STATUSES
 from ..services.cache_service import cache_service
@@ -439,6 +439,203 @@ class Database:
                         created_at=created_at, used_at=used_at, used_by_id=row[6], is_archived=bool(row[7])
                     ))
         return passes
+
+    async def get_users_paginated(
+        self, 
+        page: int = 1, 
+        per_page: int = 20,
+        search: str = None,
+        status_filter: str = None,
+        role_filter: str = None,
+        id_filter: str = None,
+        telegram_id_filter: str = None,
+        full_name_filter: str = None,
+        phone_filter: str = None,
+        apartment_filter: str = None,
+        created_date_filter: str = None
+    ) -> Tuple[List[User], int]:
+        """Получение пользователей с пагинацией и фильтрацией по столбцам"""
+        offset = (page - 1) * per_page
+        
+        # Строим WHERE условия
+        where_conditions = []
+        params = []
+        
+        # Общий поиск (совместимость)
+        if search:
+            where_conditions.append("(full_name LIKE ? OR telegram_id LIKE ? OR phone_number LIKE ?)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param])
+        
+        # Фильтры по конкретным столбцам
+        if id_filter:
+            where_conditions.append("id LIKE ?")
+            params.append(f"%{id_filter}%")
+        
+        if telegram_id_filter:
+            where_conditions.append("telegram_id LIKE ?")
+            params.append(f"%{telegram_id_filter}%")
+        
+        if full_name_filter:
+            where_conditions.append("full_name LIKE ?")
+            params.append(f"%{full_name_filter}%")
+        
+        if phone_filter:
+            where_conditions.append("phone_number LIKE ?")
+            params.append(f"%{phone_filter}%")
+        
+        if apartment_filter:
+            where_conditions.append("apartment LIKE ?")
+            params.append(f"%{apartment_filter}%")
+        
+        if status_filter:
+            where_conditions.append("status = ?")
+            params.append(status_filter)
+        
+        if role_filter:
+            where_conditions.append("role = ?")
+            params.append(role_filter)
+        
+        if created_date_filter:
+            where_conditions.append("DATE(created_at) = ?")
+            params.append(created_date_filter)
+        
+        where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            # Получаем общее количество записей
+            count_query = f"SELECT COUNT(*) FROM users{where_clause}"
+            async with db.execute(count_query, params) as cursor:
+                total_count = (await cursor.fetchone())[0]
+            
+            # Получаем данные с пагинацией
+            query = f"""
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
+                FROM users{where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([per_page, offset])
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                users = [
+                    User(
+                        id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
+                        phone_number=row[4], apartment=row[5], status=row[6],
+                        blocked_until=row[7], block_reason=row[8],
+                        created_at=row[9], updated_at=row[10]
+                    ) for row in rows
+                ]
+                
+                return users, total_count
+
+    async def get_passes_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 20,
+        search: str = None,
+        status_filter: str = None,
+        id_filter: str = None,
+        car_number_filter: str = None,
+        owner_filter: str = None,
+        phone_filter: str = None,
+        apartment_filter: str = None,
+        created_date_filter: str = None,
+        used_date_filter: str = None
+    ) -> Tuple[List[Pass], int]:
+        """Получение пропусков с пагинацией и фильтрацией по столбцам"""
+        offset = (page - 1) * per_page
+        
+        # Строим WHERE условия
+        where_conditions = []
+        params = []
+        
+        # Общий поиск (совместимость)
+        if search:
+            where_conditions.append("car_number LIKE ?")
+            params.append(f"%{search}%")
+        
+        # Фильтры по конкретным столбцам
+        if id_filter:
+            where_conditions.append("p.id LIKE ?")
+            params.append(f"%{id_filter}%")
+        
+        if car_number_filter:
+            where_conditions.append("p.car_number LIKE ?")
+            params.append(f"%{car_number_filter}%")
+        
+        if owner_filter:
+            where_conditions.append("u.full_name LIKE ?")
+            params.append(f"%{owner_filter}%")
+        
+        if phone_filter:
+            where_conditions.append("u.phone_number LIKE ?")
+            params.append(f"%{phone_filter}%")
+        
+        if apartment_filter:
+            where_conditions.append("u.apartment LIKE ?")
+            params.append(f"%{apartment_filter}%")
+        
+        if status_filter:
+            where_conditions.append("p.status = ?")
+            params.append(status_filter)
+        
+        if created_date_filter:
+            where_conditions.append("DATE(p.created_at) = ?")
+            params.append(created_date_filter)
+        
+        if used_date_filter:
+            where_conditions.append("DATE(p.used_at) = ?")
+            params.append(used_date_filter)
+        
+        where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            # Получаем общее количество записей
+            # Используем JOIN если есть фильтры по пользователям
+            if owner_filter or phone_filter or apartment_filter:
+                count_query = f"""
+                    SELECT COUNT(*) 
+                    FROM passes p 
+                    JOIN users u ON p.user_id = u.id{where_clause}
+                """
+            else:
+                count_query = f"SELECT COUNT(*) FROM passes p{where_clause}"
+            
+            async with db.execute(count_query, params) as cursor:
+                total_count = (await cursor.fetchone())[0]
+            
+            # Получаем данные с пагинацией
+            # Используем JOIN если есть фильтры по пользователям
+            if owner_filter or phone_filter or apartment_filter:
+                query = f"""
+                    SELECT p.id, p.user_id, p.car_number, p.status, p.created_at, p.used_at, p.used_by_id, p.is_archived
+                    FROM passes p 
+                    JOIN users u ON p.user_id = u.id{where_clause}
+                    ORDER BY p.created_at DESC
+                    LIMIT ? OFFSET ?
+                """
+            else:
+                query = f"""
+                    SELECT p.id, p.user_id, p.car_number, p.status, p.created_at, p.used_at, p.used_by_id, p.is_archived
+                    FROM passes p{where_clause}
+                    ORDER BY p.created_at DESC
+                    LIMIT ? OFFSET ?
+                """
+            
+            params.extend([per_page, offset])
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                passes = [
+                    Pass(
+                        id=row[0], user_id=row[1], car_number=row[2], status=row[3],
+                        created_at=row[4], used_at=row[5], used_by_id=row[6], is_archived=bool(row[7])
+                    ) for row in rows
+                ]
+                
+                return passes, total_count
 
     async def cleanup(self):
         """Очистка ресурсов базы данных"""
