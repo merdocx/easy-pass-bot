@@ -240,7 +240,9 @@ class Database:
             async with db.execute("""
                 SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
                 FROM users
-                ORDER BY created_at DESC
+                ORDER BY 
+                    CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+                    created_at DESC
             """) as cursor:
                 rows = await cursor.fetchall()
                 return [
