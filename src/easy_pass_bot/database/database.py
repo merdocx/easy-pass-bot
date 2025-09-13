@@ -91,6 +91,10 @@ class Database:
     async def create_user(self, user: User) -> int:
         """Создание пользователя с инвалидацией кэша"""
         try:
+            # Нормализуем номер телефона перед созданием
+            from ..utils.phone_normalizer import normalize_phone_number
+            user.phone_number = normalize_phone_number(user.phone_number)
+            
             user_id = await retry_service.execute_with_retry(
                 self._create_user_internal, user
             )
@@ -686,7 +690,7 @@ class Database:
                 await db.commit()
                 
                 # Инвалидируем кэш
-                cache_service.invalidate_user_cache(user_id)
+                await cache_service.invalidate_pattern(f"user_.*")
                 
                 logger.info(f"User {user_id} role changed to {new_role}")
                 return True
@@ -698,6 +702,133 @@ class Database:
         """Очистка ресурсов базы данных"""
         # Закрываем все соединения
         pass
+
+    # ==================== МЕТОДЫ ДЛЯ РАБОТЫ С АДМИНИСТРАТОРАМИ ====================
+    
+    async def get_admin_by_phone(self, phone_number: str) -> Optional['Admin']:
+        """Получить администратора по номеру телефона"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE phone_number = ? AND is_active = 1",
+                    (phone_number,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        from .models import Admin
+                        return Admin(
+                            id=row[0], username=row[1], full_name=row[2],
+                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
+                            created_at=row[6], updated_at=row[7], last_login=row[8],
+                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
+                        )
+        except Exception as e:
+            logger.error(f"Error getting admin by phone {phone_number}: {e}")
+        return None
+
+    async def get_admin_by_user_id(self, user_id: int) -> Optional['Admin']:
+        """Получить администратора по ID пользователя"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE user_id = ? AND is_active = 1",
+                    (user_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        from .models import Admin
+                        return Admin(
+                            id=row[0], username=row[1], full_name=row[2],
+                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
+                            created_at=row[6], updated_at=row[7], last_login=row[8],
+                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
+                        )
+        except Exception as e:
+            logger.error(f"Error getting admin by user_id {user_id}: {e}")
+        return None
+
+    async def create_admin(self, username: str, full_name: str, password_hash: str, 
+                          user_id: int, phone_number: str, role: str = "admin") -> bool:
+        """Создать нового администратора"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """INSERT INTO admins (username, full_name, password_hash, role, is_active, created_at, updated_at, user_id, phone_number, last_login_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (username, full_name, password_hash, role, True, 
+                     datetime.now(), datetime.now(), user_id, phone_number, None)
+                )
+                await db.commit()
+                logger.info(f"Admin created for user_id {user_id} with phone {phone_number}")
+                return True
+        except Exception as e:
+            logger.error(f"Error creating admin for user_id {user_id}: {e}")
+            return False
+
+    async def update_admin_password(self, admin_id: int, new_password_hash: str) -> bool:
+        """Обновить пароль администратора"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE admins SET password_hash = ?, updated_at = ? WHERE id = ?",
+                    (new_password_hash, datetime.now(), admin_id)
+                )
+                await db.commit()
+                logger.info(f"Admin password updated for admin_id {admin_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error updating admin password for admin_id {admin_id}: {e}")
+            return False
+
+    async def update_admin_last_login(self, admin_id: int) -> bool:
+        """Обновить время последнего входа администратора"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE admins SET last_login_at = ?, last_login = ? WHERE id = ?",
+                    (datetime.now(), datetime.now(), admin_id)
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error updating admin last login for admin_id {admin_id}: {e}")
+            return False
+
+    async def get_all_admins(self) -> List['Admin']:
+        """Получить всех активных администраторов"""
+        try:
+            admins = []
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE is_active = 1 ORDER BY created_at DESC"
+                ) as cursor:
+                    async for row in cursor:
+                        from .models import Admin
+                        admins.append(Admin(
+                            id=row[0], username=row[1], full_name=row[2],
+                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
+                            created_at=row[6], updated_at=row[7], last_login=row[8],
+                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
+                        ))
+            return admins
+        except Exception as e:
+            logger.error(f"Error getting all admins: {e}")
+            return []
+
+    async def deactivate_admin(self, admin_id: int) -> bool:
+        """Деактивировать администратора"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE admins SET is_active = 0, updated_at = ? WHERE id = ?",
+                    (datetime.now(), admin_id)
+                )
+                await db.commit()
+                logger.info(f"Admin deactivated: admin_id {admin_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error deactivating admin {admin_id}: {e}")
+            return False
 
 # Глобальный экземпляр базы данных
 db = Database()

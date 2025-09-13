@@ -212,6 +212,13 @@ body {
     font-size: 0.75rem;
 }
 
+.form-help {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
 /* Панель управления */
 .dashboard {
     min-height: 100vh;

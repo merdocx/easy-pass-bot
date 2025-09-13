@@ -23,10 +23,14 @@
             
             <div class="form-group">
                 <label for="username">
-                    <i class="fas fa-user"></i>
-                    Имя пользователя
+                    <i class="fas fa-phone"></i>
+                    Номер телефона
                 </label>
-                <input type="text" id="username" name="username" required value="admin" readonly>
+                <input type="text" id="username" name="username" required 
+                       placeholder="+7 999 999 99 99" 
+                       pattern="[\+]?[7-8]?[\s\-\(\)]?[0-9\s\-\(\)]{10,15}"
+                       title="Введите номер телефона в формате +7 999 999 99 99">
+                <small class="form-help">Введите номер телефона в любом формате</small>
             </div>
             
             <div class="form-group">
@@ -44,7 +48,7 @@
         </form>
         
         <div class="login-footer">
-            <p><small>По умолчанию: admin / admin123</small></p>
+            <p><small>Используйте номер телефона и персональный пароль</small></p>
         </div>
     </div>
 </div>

@@ -62,23 +62,68 @@ security = HTTPBearer(auto_error=False)
 active_sessions: Dict[str, Dict[str, Any]] = {}
 
 class AdminAuth:
-    def __init__(self):
-        # Хэш пароля по умолчанию: admin123
-        self.admin_password_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
+    def __init__(self, database=None):
+        # Подключение к базе данных
+        self.db = database
     
-    def verify_password(self, password: str) -> bool:
-        return bcrypt.checkpw(password.encode('utf-8'), self.admin_password_hash)
+    def normalize_phone(self, phone: str) -> str:
+        """Нормализация номера телефона для авторизации"""
+        try:
+            from easy_pass_bot.utils.phone_normalizer import normalize_phone_number
+            return normalize_phone_number(phone)
+        except Exception as e:
+            logger.error(f"Error normalizing phone {phone}: {e}")
+            return phone
     
-    def create_session(self, username: str) -> str:
+    async def verify_admin_credentials(self, phone: str, password: str) -> Optional['Admin']:
+        """Проверка учетных данных администратора"""
+        try:
+            # Нормализуем номер телефона
+            normalized_phone = self.normalize_phone(phone)
+            
+            # Ищем администратора по номеру телефона
+            admin = await self.db.get_admin_by_phone(normalized_phone)
+            if not admin:
+                logger.warning(f"Admin not found for phone: {normalized_phone}")
+                return None
+            
+            # Проверяем пароль
+            if not bcrypt.checkpw(password.encode('utf-8'), admin.password_hash.encode('utf-8')):
+                logger.warning(f"Invalid password for admin: {admin.full_name}")
+                return None
+            
+            # Проверяем, что связанный пользователь имеет роль admin
+            user = await self.db.get_user_by_id(admin.user_id)
+            if not user or user.role != 'admin':
+                logger.warning(f"User {admin.user_id} is not admin role")
+                return None
+            
+            # Обновляем время последнего входа
+            await self.db.update_admin_last_login(admin.id)
+            
+            logger.info(f"Admin {admin.full_name} successfully authenticated")
+            return admin
+            
+        except Exception as e:
+            logger.error(f"Error verifying admin credentials: {e}")
+            return None
+    
+    def create_admin_session(self, admin: 'Admin') -> str:
+        """Создание сессии для администратора"""
         session_id = secrets.token_urlsafe(32)
         active_sessions[session_id] = {
-            "username": username,
+            "admin_id": admin.id,
+            "user_id": admin.user_id,
+            "full_name": admin.full_name,
+            "phone_number": admin.phone_number,
             "created_at": datetime.now(),
             "last_activity": datetime.now()
         }
+        logger.info(f"Admin session created for {admin.full_name}")
         return session_id
     
     def verify_session(self, session_id: str) -> bool:
+        """Проверка валидности сессии"""
         if session_id not in active_sessions:
             return False
         
@@ -92,19 +137,48 @@ class AdminAuth:
         active_sessions[session_id]["last_activity"] = datetime.now()
         return True
     
-    def get_session_user(self, session_id: str) -> Optional[str]:
+    def get_session_admin(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Получение данных администратора из сессии"""
         if session_id in active_sessions:
-            return active_sessions[session_id]["username"]
+            return active_sessions[session_id]
         return None
+    
+    def get_session_user_id(self, session_id: str) -> Optional[int]:
+        """Получение user_id из сессии (для обратной совместимости)"""
+        session = self.get_session_admin(session_id)
+        return session.get("user_id") if session else None
+    
+    # Методы для обратной совместимости (будут удалены в будущем)
+    def verify_password(self, password: str) -> bool:
+        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
+        logger.warning("Using deprecated verify_password method")
+        return False
+    
+    def create_session(self, username: str) -> str:
+        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
+        logger.warning("Using deprecated create_session method")
+        return ""
+    
+    def get_session_user(self, session_id: str) -> Optional[str]:
+        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
+        session = self.get_session_admin(session_id)
+        return session.get("full_name") if session else None
 
-admin_auth = AdminAuth()
+admin_auth = AdminAuth(db)
 
 async def get_current_user(request: Request) -> Optional[str]:
-    """Получение текущего пользователя из сессии"""
+    """Получение текущего пользователя из сессии (для обратной совместимости)"""
     session_id = request.cookies.get("admin_session")
     if not session_id or not admin_auth.verify_session(session_id):
         return None
     return admin_auth.get_session_user(session_id)
+
+async def get_current_admin(request: Request) -> Optional[Dict[str, Any]]:
+    """Получение данных текущего администратора из сессии"""
+    session_id = request.cookies.get("admin_session")
+    if not session_id or not admin_auth.verify_session(session_id):
+        return None
+    return admin_auth.get_session_admin(session_id)
 
 async def require_auth_dependency(request: Request):
     """Проверка авторизации для использования в Depends"""
@@ -172,25 +246,42 @@ async def login_page_alt(request: Request):
 async def login(request: Request, username: str = Form(...), password: str = Form(...), redirect_url: str = Form("/dashboard")):
     """Обработка авторизации"""
     
-    if username == "admin" and admin_auth.verify_password(password):
-        session_id = admin_auth.create_session(username)
-        response = RedirectResponse(url=redirect_url, status_code=302)
-        response.set_cookie(
-            key="admin_session",
-            value=session_id,
-            httponly=True,
-            secure=False,  # В продакшене должно быть True
-            samesite="lax",
-            max_age=8 * 60 * 60  # 8 часов
-        )
-        logger.info(f"Admin {username} logged in successfully")
-        return response
-    else:
-        return templates.TemplateResponse(
+    try:
+        # Нормализуем username (номер телефона) и проверяем учетные данные
+        admin = await admin_auth.verify_admin_credentials(username, password)
+        
+        if admin:
+            # Создаем сессию для администратора
+            session_id = admin_auth.create_admin_session(admin)
+            response = RedirectResponse(url=redirect_url, status_code=302)
+            response.set_cookie(
+                key="admin_session",
+                value=session_id,
+                httponly=True,
+                secure=False,  # В продакшене должно быть True
+                samesite="lax",
+                max_age=8 * 60 * 60  # 8 часов
+            )
+            logger.info(f"Admin {admin.full_name} logged in successfully")
+            return response
+        else:
+            logger.warning(f"Failed login attempt with username: {username}")
+            return templates.TemplateResponse(
             "login.html", 
             {
                 "request": request, 
                 "error": "Неверные учетные данные",
+                    "redirect_url": redirect_url
+                }
+            )
+            
+    except Exception as e:
+        logger.error(f"Error during login: {e}")
+        return templates.TemplateResponse(
+            "login.html", 
+            {
+                "request": request, 
+                "error": "Ошибка сервера",
                 "redirect_url": redirect_url
             }
         )
@@ -501,6 +592,77 @@ async def change_user_role(
         
         # Изменяем роль
         await db.change_user_role(user_id, new_role)
+        
+        # Если роль изменилась на admin, создаем админа и отправляем уведомление
+        if new_role == 'admin':
+            try:
+                # Проверяем, есть ли уже админ с этим user_id
+                existing_admin = await db.get_admin_by_user_id(user_id)
+                if not existing_admin:
+                    # Создаем нового админа
+                    from easy_pass_bot.utils.password_generator import generate_secure_password, hash_password
+                    from easy_pass_bot.utils.telegram_notifier import TelegramNotifier
+                    
+                    # Генерируем пароль
+                    password = generate_secure_password()
+                    password_hash = hash_password(password)
+                    
+                    # Нормализуем номер телефона
+                    from easy_pass_bot.utils.phone_normalizer import normalize_phone_number
+                    normalized_phone = normalize_phone_number(user.phone_number)
+                    
+                    # Создаем админа
+                    from easy_pass_bot.database.models import Admin
+                    
+                    new_admin = Admin(
+                        username=normalized_phone,
+                        full_name=user.full_name,
+                        password_hash=password_hash,
+                        role='admin',
+                        is_active=True,
+                        user_id=user_id,
+                        phone_number=normalized_phone
+                    )
+                    
+                    admin_id = await db.create_admin(
+                        username=new_admin.username,
+                        full_name=new_admin.full_name,
+                        password_hash=new_admin.password_hash,
+                        user_id=new_admin.user_id,
+                        phone_number=new_admin.phone_number,
+                        role=new_admin.role
+                    )
+                    logger.info(f"Created admin record for user {user.full_name} (ID: {user_id}) with admin ID {admin_id}")
+                    
+                    # Отправляем уведомление в Telegram
+                    try:
+                        bot_token = os.getenv('BOT_TOKEN')
+                        if bot_token:
+                            notifier = TelegramNotifier(bot_token)
+                            admin_url = f"http://{request.headers.get('host', 'localhost:8000')}"
+                            
+                            # Отправляем приветствие
+                            await notifier.send_admin_welcome(
+                                user.telegram_id, 
+                                user.full_name
+                            )
+                            
+                            # Отправляем учетные данные
+                            await notifier.send_admin_credentials(
+                                user.telegram_id,
+                                user.full_name,
+                                normalized_phone,
+                                password
+                            )
+                            
+                            logger.info(f"Sent admin credentials to user {user.full_name} (Telegram ID: {user.telegram_id})")
+                        else:
+                            logger.warning("BOT_TOKEN not found, cannot send Telegram notification")
+                    except Exception as e:
+                        logger.error(f"Failed to send Telegram notification: {e}")
+                        
+            except Exception as e:
+                logger.error(f"Failed to create admin for user {user_id}: {e}")
         
         # Логируем изменение роли
         logger.info(f"Admin {current_user} (ID: {current_user_obj.id}) changed user {user.full_name} (ID: {user_id}) role from '{old_role}' to '{new_role}'")

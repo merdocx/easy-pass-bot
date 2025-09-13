@@ -51,12 +51,16 @@ class UserService(BaseService):
                     f"Пользователь с Telegram ID {telegram_id} уже существует"
                 )
             
+            # Нормализуем номер телефона
+            from ..utils.phone_normalizer import normalize_phone_number
+            normalized_phone = normalize_phone_number(phone_number)
+            
             # Создаем пользователя
             user = User(
                 telegram_id=telegram_id,
                 role=role,
                 full_name=full_name,
-                phone_number=phone_number,
+                phone_number=normalized_phone,
                 apartment=apartment,
                 status=USER_STATUSES['PENDING']
             )
