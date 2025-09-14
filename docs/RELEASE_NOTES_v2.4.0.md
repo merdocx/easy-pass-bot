@@ -162,3 +162,4 @@ Admin {username} (ID: {admin_id}) changed user {full_name} (ID: {user_id}) role 
 ---
 
 **Спасибо за использование Easy Pass Bot v2.4.0!** 🎉
+

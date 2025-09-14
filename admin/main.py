@@ -577,10 +577,11 @@ async def change_user_role(
         if new_role not in valid_roles:
             raise HTTPException(status_code=400, detail="Недопустимая роль")
         
-        # Проверяем, что админ не может изменить роль другого админа
-        if user.role == 'admin' and current_user_obj.id != user.id:
-            logger.warning(f"Admin {current_user} attempted to change another admin's role")
-            raise HTTPException(status_code=403, detail="Нельзя изменить роль другого администратора")
+        # Проверяем, что админ не может изменить роль другого админа только если пытается повысить до admin
+        # Но может понижать других админов до resident или security
+        if user.role == 'admin' and current_user_obj.id != user.id and new_role == 'admin':
+            logger.warning(f"Admin {current_user} attempted to promote another admin to admin role")
+            raise HTTPException(status_code=403, detail="Нельзя назначить роль администратора другому администратору")
         
         # Проверяем, что админ не может изменить свою роль
         if current_user_obj.id == user.id:
@@ -592,6 +593,15 @@ async def change_user_role(
         
         # Изменяем роль
         await db.change_user_role(user_id, new_role)
+        
+        # Если роль изменилась с admin на другую, деактивируем админа
+        if old_role == 'admin' and new_role != 'admin':
+            try:
+                # Деактивируем админа
+                await db.deactivate_admin(user_id)
+                logger.info(f"Deactivated admin for user {user.full_name} (ID: {user_id}) after role change to {new_role}")
+            except Exception as e:
+                logger.error(f"Failed to deactivate admin for user {user_id}: {e}")
         
         # Если роль изменилась на admin, создаем админа и отправляем уведомление
         if new_role == 'admin':

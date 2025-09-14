@@ -67,3 +67,4 @@ echo "🚀 Для запуска админки:"
 echo "   cd /root/easy_pass_bot/admin && python start_admin.py"
 echo ""
 echo "🌐 Админка доступна по адресу: http://localhost:8080"
+

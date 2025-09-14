@@ -173,3 +173,4 @@ async def send_admin_credentials_async(user_id: int, full_name: str,
         return False
     
     return await notifier.send_admin_credentials(user_id, full_name, phone_number, password)
+
