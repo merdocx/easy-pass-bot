@@ -45,14 +45,20 @@ def test_validator_phone():
 def test_validator_car_number():
     """Тест валидации номера автомобиля"""
     validator = InputValidator()
-    # Валидные номера
+    # Валидные номера с кириллицей
     assert validator.validate_car_number("А123БВ777")[0] is True
     assert validator.validate_car_number("а123бв777")[0] is True  # Проверка регистра
+    # Валидные номера с латиницей
+    assert validator.validate_car_number("A123BC777")[0] is True
+    assert validator.validate_car_number("a123bc777")[0] is True  # Проверка регистра
+    # Валидные смешанные номера
+    assert validator.validate_car_number("A123БВ777")[0] is True  # Латиница + кириллица
+    assert validator.validate_car_number("А123BC777")[0] is True  # Кириллица + латиница
     # Невалидные номера
     assert validator.validate_car_number("")[0] is False
     assert validator.validate_car_number("123")[0] is False
     assert validator.validate_car_number("А123БВ77")[0] is False  # Неправильная длина
-    assert validator.validate_car_number("A123BV777")[0] is False  # Латинские буквы
+    assert validator.validate_car_number("123ABC777")[0] is False  # Начинается с цифры
 
 def test_validator_name():
     """Тест валидации ФИО"""

@@ -15,7 +15,7 @@ class ValidationService(BaseValidator):
     
     # Регулярные выражения для валидации
     PHONE_PATTERN = re.compile(r'^\+?[1-9]\d{1,14}$')
-    CAR_NUMBER_PATTERN = re.compile(r'^[А-Яа-я]\d{3}[А-Яа-я]{2}\d{3}$')
+    CAR_NUMBER_PATTERN = re.compile(r'^[А-Яа-яA-Za-z]\d{3}[А-Яа-яA-Za-z]{2}\d{3}$')
     EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     
     # Минимальные и максимальные длины
@@ -150,13 +150,14 @@ class ValidationService(BaseValidator):
         
         phone = phone.strip()
         
-        # Убираем все пробелы и дефисы
-        clean_phone = re.sub(r'[\s\-\(\)]', '', phone)
+        # Используем новую валидацию из phone_normalizer
+        from ..utils.phone_normalizer import validate_phone_format, is_russian_phone
         
-        if not self.PHONE_PATTERN.match(clean_phone):
+        if not (is_russian_phone(phone) and validate_phone_format(phone)):
             self.add_error(
-                "Неверный формат телефона. "
-                "Используйте формат: +7 900 123 45 67"
+                "Поддерживаются только российские номера телефонов. "
+                "Номер должен содержать 11 или 12 цифр. "
+                "Используйте формат: +7 900 123 45 67 или 8 900 123 45 67"
             )
     
     async def _validate_apartment(self, apartment: str) -> None:
@@ -222,7 +223,7 @@ class ValidationService(BaseValidator):
                 'pattern': r'^[а-яА-ЯёЁa-zA-Z\s\-]+$'
             },
             'phone': {
-                'pattern': self.PHONE_PATTERN.pattern
+                'pattern': '11-12 цифр, российские номера (+7 или 8)'
             },
             'apartment': {
                 'min_length': self.MIN_APARTMENT_LENGTH,

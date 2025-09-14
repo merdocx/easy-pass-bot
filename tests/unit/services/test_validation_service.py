@@ -44,9 +44,29 @@ class TestValidationService:
         assert any('apartment' in error for error in validation_service.get_errors())
     
     @pytest.mark.asyncio
-    async def test_validate_car_number_success(self, validation_service):
-        """Тест успешной валидации номера автомобиля"""
+    async def test_validate_car_number_success_cyrillic(self, validation_service):
+        """Тест успешной валидации номера автомобиля с кириллицей"""
         car_number = 'А123БВ777'
+        
+        result = await validation_service.validate_car_number(car_number)
+        
+        assert result is True
+        assert not validation_service.has_errors()
+    
+    @pytest.mark.asyncio
+    async def test_validate_car_number_success_latin(self, validation_service):
+        """Тест успешной валидации номера автомобиля с латиницей"""
+        car_number = 'A123BC777'
+        
+        result = await validation_service.validate_car_number(car_number)
+        
+        assert result is True
+        assert not validation_service.has_errors()
+    
+    @pytest.mark.asyncio
+    async def test_validate_car_number_success_mixed(self, validation_service):
+        """Тест успешной валидации смешанного номера автомобиля"""
+        car_number = 'A123БВ777'
         
         result = await validation_service.validate_car_number(car_number)
         

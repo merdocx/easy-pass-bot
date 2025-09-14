@@ -10,7 +10,7 @@ class InputValidator:
     """Валидатор входных данных"""
     # Регулярные выражения для валидации
     PHONE_PATTERN = r'^\+?[1-9]\d{1,14}$'
-    CAR_NUMBER_PATTERN = r'^[А-Яа-я]\d{3}[А-Яа-я]{2}\d{3}$'
+    CAR_NUMBER_PATTERN = r'^[А-Яа-яA-Za-z]\d{3}[А-Яа-яA-Za-z]{2}\d{3}$'
     NAME_PATTERN = r'^[А-Яа-я\s\-]{2,50}$'
     APARTMENT_PATTERN = r'^\d{1,4}[А-Яа-я]?$'
     TELEGRAM_ID_PATTERN = r'^\d{1,20}$'
@@ -39,7 +39,7 @@ class InputValidator:
             return True, None
         
         # Если это не российский номер, отклоняем его
-        return False, "Поддерживаются только российские номера телефонов. Используйте формат: +7XXXXXXXXXX или 8XXXXXXXXXX"
+        return False, "Поддерживаются только российские номера телефонов. Номер должен содержать 11 или 12 цифр. Используйте формат: +7XXXXXXXXXX или 8XXXXXXXXXX"
     @classmethod
     def validate_car_number(cls, car_number: str) -> Tuple[bool, Optional[str]]:
         """
@@ -55,7 +55,7 @@ class InputValidator:
         if len(clean_number) > cls.MAX_CAR_NUMBER_LENGTH:
             return False, f"Номер автомобиля слишком длинный (максимум {cls.MAX_CAR_NUMBER_LENGTH} символов)"
         if not re.match(cls.CAR_NUMBER_PATTERN, clean_number):
-            return False, "Неверный формат номера автомобиля. Используйте формат: А123БВ777"
+            return False, "Неверный формат номера автомобиля. Используйте формат: А123БВ777 или A123BC777"
         return True, None
     @classmethod
     def validate_name(cls, name: str) -> Tuple[bool, Optional[str]]:

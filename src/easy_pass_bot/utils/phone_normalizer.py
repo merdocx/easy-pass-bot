@@ -23,14 +23,18 @@ def normalize_phone_number(phone: str) -> str:
                или исходный номер, если нормализация невозможна
         
     Поддерживаемые входные форматы:
-    - +7 999 999 99 99
-    - 8 999 999 99 99  
-    - 89999999999
-    - 999 999 99 99
-    - +7(999)999-99-99
-    - 8(999)999-99-99
-    - +7 999-999-99-99
-    - 8 999-999-99-99
+    - +7 999 999 99 99  (11 цифр)
+    - 8 999 999 99 99   (11 цифр)
+    - 89999999999       (11 цифр)
+    - 79999999999       (11 цифр)
+    - 799999999999      (12 цифр)
+    - +7(999)999-99-99  (11 цифр)
+    - 8(999)999-99-99   (11 цифр)
+    - +7 999-999-99-99  (11 цифр)
+    - 8 999-999-99-99   (11 цифр)
+    
+    ⚠️ ВАЖНО: Номер должен содержать 11 или 12 цифр.
+    Номера с 10 цифрами больше НЕ ПОДДЕРЖИВАЮТСЯ.
     """
     if not phone or not isinstance(phone, str):
         return phone or ""
@@ -75,16 +79,12 @@ def normalize_phone_number(phone: str) -> str:
         logger.info(f"Normalized phone: '{phone}' -> '{formatted}'")
         return formatted
     
-    # Если номер имеет 10 цифр (без кода страны)
-    elif length == 10:
-        # Проверяем, что это российский номер (начинается с 9)
-        if digits_only.startswith('9'):
-            formatted = format_russian_phone(digits_only)
-            logger.info(f"Normalized phone: '{phone}' -> '{formatted}'")
-            return formatted
-        else:
-            logger.warning(f"Phone number doesn't start with 9: '{phone}'")
-            return phone
+    # Если номер имеет 12 цифр и начинается с 7 (+7 + 10 цифр)
+    elif length == 12 and digits_only.startswith('7'):
+        # Форматируем без первых двух цифр (7)
+        formatted = format_russian_phone(digits_only[1:])  # Убираем первую 7
+        logger.info(f"Normalized phone: '{phone}' -> '{formatted}'")
+        return formatted
     
     # Если номер не соответствует российскому формату
     else:
@@ -127,10 +127,10 @@ def validate_phone_format(phone: str) -> bool:
     digits_only = re.sub(r'[^\d]', '', phone)
     length = len(digits_only)
     
-    # Российские номера: 10 цифр (начинается с 9) или 11 цифр (начинается с 8 или 7)
-    if length == 10 and digits_only.startswith('9'):
+    # Номер должен содержать 11 или 12 цифр
+    if length == 11 and (digits_only.startswith('8') or digits_only.startswith('7')):
         return True
-    elif length == 11 and (digits_only.startswith('8') or digits_only.startswith('7')):
+    elif length == 12 and digits_only.startswith('7'):
         return True
     
     return False
@@ -150,9 +150,12 @@ def is_russian_phone(phone: str) -> bool:
         return False
     
     digits_only = re.sub(r'[^\d]', '', phone)
+    length = len(digits_only)
     
-    # Российские номера начинаются с 8, 7 или 9
-    if digits_only.startswith(('8', '7', '9')):
+    # Российские номера: 11 цифр (начинается с 8 или 7) или 12 цифр (начинается с 7)
+    if length == 11 and digits_only.startswith(('8', '7')):
+        return True
+    elif length == 12 and digits_only.startswith('7'):
         return True
     
     return False
@@ -162,20 +165,22 @@ def is_russian_phone(phone: str) -> bool:
 if __name__ == "__main__":
     # Тестовые номера
     test_phones = [
-        "+7 999 123 45 67",
-        "8 999 123 45 67",
-        "89991234567",
-        "999 123 45 67",
-        "+7(999)123-45-67",
-        "8(999)123-45-67",
-        "+7 999-123-45-67",
-        "8 999-123-45-67",
-        "9991234567",
-        "+380 99 999 99 99",  # Украинский номер
-        "123",  # Слишком короткий
-        "999999999999",  # Слишком длинный
-        "",  # Пустой
-        "abc",  # Не цифры
+        "+7 999 123 45 67",  # 11 цифр - валидный
+        "8 999 123 45 67",   # 11 цифр - валидный
+        "89991234567",       # 11 цифр - валидный
+        "79991234567",       # 11 цифр - валидный
+        "799912345678",      # 12 цифр - валидный
+        "+7(999)123-45-67",  # 11 цифр - валидный
+        "8(999)123-45-67",   # 11 цифр - валидный
+        "+7 999-123-45-67",  # 11 цифр - валидный
+        "8 999-123-45-67",   # 11 цифр - валидный
+        "9991234567",        # 10 цифр - теперь недопустимо
+        "999 123 45 67",     # 10 цифр - теперь недопустимо
+        "+380 99 999 99 99", # Украинский номер
+        "123",               # Слишком короткий
+        "999999999999",      # 12 цифр, но начинается с 9
+        "",                  # Пустой
+        "abc",               # Не цифры
     ]
     
     print("Тестирование нормализации телефонов:")

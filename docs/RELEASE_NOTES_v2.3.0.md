@@ -250,3 +250,4 @@ cd admin && python start_admin.py
 **Статус:** ✅ Стабильная версия  
 **Совместимость:** Python 3.8+, FastAPI 0.100+
 
+

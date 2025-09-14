@@ -183,7 +183,7 @@ async def handle_my_passes_message(message: Message):
             text += f"{status_emoji} {pass_obj.car_number} - {status_text}\n"
             text += f"📅 {pass_obj.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
     await message.answer(text, reply_markup=get_resident_passes_keyboard())
-@router.message(F.text.regexp(r'^[А-Яа-я]\d{3}[А-Яа-я]{2}\d{3}$'))
+@router.message(F.text.regexp(r'^[А-Яа-яA-Za-z]\d{3}[А-Яа-яA-Za-z]{2}\d{3}$'))
 
 async def handle_resident_text(message: Message):
     """Обработка текстовых сообщений от жителей"""
@@ -208,7 +208,7 @@ async def handle_resident_text(message: Message):
         return
     # Проверяем, соответствует ли текст формату номера автомобиля
     import re
-    pattern = r'^[А-Яа-я]\d{3}[А-Яа-я]{2}\d{3}$'
+    pattern = r'^[А-Яа-яA-Za-z]\d{3}[А-Яа-яA-Za-z]{2}\d{3}$'
     if re.match(pattern, text):
         logger.info(f"Text matches car number pattern: {text}")
         await handle_pass_creation_internal(message, text)
