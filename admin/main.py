@@ -674,6 +674,30 @@ async def change_user_role(
             except Exception as e:
                 logger.error(f"Failed to create admin for user {user_id}: {e}")
         
+        # Отправляем уведомление о смене роли (для всех ролей кроме admin, так как для admin уже отправлены специальные уведомления)
+        if new_role != 'admin':
+            try:
+                bot_token = os.getenv('BOT_TOKEN')
+                if bot_token and user.telegram_id:
+                    from easy_pass_bot.utils.telegram_notifier import TelegramNotifier
+                    notifier = TelegramNotifier(bot_token)
+                    
+                    await notifier.send_role_change_notification(
+                        user.telegram_id,
+                        user.full_name,
+                        old_role,
+                        new_role
+                    )
+                    
+                    logger.info(f"Sent role change notification to user {user.full_name} (Telegram ID: {user.telegram_id}): {old_role} -> {new_role}")
+                else:
+                    if not bot_token:
+                        logger.warning("BOT_TOKEN not found, cannot send role change notification")
+                    if not user.telegram_id:
+                        logger.warning(f"User {user.full_name} has no Telegram ID, cannot send role change notification")
+            except Exception as e:
+                logger.error(f"Failed to send role change notification to user {user_id}: {e}")
+        
         # Логируем изменение роли
         logger.info(f"Admin {current_user} (ID: {current_user_obj.id}) changed user {user.full_name} (ID: {user_id}) role from '{old_role}' to '{new_role}'")
         
