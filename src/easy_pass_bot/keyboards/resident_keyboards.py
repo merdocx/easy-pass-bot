@@ -14,7 +14,7 @@ def get_resident_main_menu() -> ReplyKeyboardMarkup:
     )
     return keyboard
 
-def get_resident_passes_keyboard() -> ReplyKeyboardMarkup:
+def get_resident_passes_keyboard(passes=None) -> ReplyKeyboardMarkup:
     """Клавиатура для просмотра заявок жителя"""
     keyboard = ReplyKeyboardMarkup(
         keyboard=[

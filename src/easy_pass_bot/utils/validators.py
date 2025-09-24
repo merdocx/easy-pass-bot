@@ -25,7 +25,25 @@ def validate_car_number(car_number: str) -> bool:
     """Валидация номера автомобиля"""
     if not car_number:
         return False
-    car_number = car_number.strip()
-    # Проверяем формат: 1 буква + 3 цифры + 2 буквы + 3 цифры
-    pattern = r'^[А-Яа-я]\d{3}[А-Яа-я]{2}\d{3}$'
-    return bool(re.match(pattern, car_number))
+    car_number = car_number.strip().upper()
+    
+    # Убираем пробелы и дефисы
+    car_number = re.sub(r'[\s\-]', '', car_number)
+    
+    # Проверяем различные форматы российских номеров:
+    # А123БВ456 (1 буква + 3 цифры + 2 буквы + 3 цифры)
+    # А123БВ45 (1 буква + 3 цифры + 2 буквы + 2 цифры) 
+    # А123БВ4 (1 буква + 3 цифры + 2 буквы + 1 цифра)
+    # А123БВ (1 буква + 3 цифры + 2 буквы)
+    patterns = [
+        r'^[А-Я]\d{3}[А-Я]{2}\d{1,3}$',  # А123БВ456, А123БВ45, А123БВ4
+        r'^[А-Я]\d{3}[А-Я]{2}$',         # А123БВ
+        r'^\d{3}[А-Я]{2}\d{1,3}$',       # 123БВ456, 123БВ45, 123БВ4
+        r'^\d{3}[А-Я]{2}$',              # 123БВ
+    ]
+    
+    for pattern in patterns:
+        if re.match(pattern, car_number):
+            return True
+    
+    return False

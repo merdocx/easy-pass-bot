@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Управление пользователями - Easy Pass Admin{% endblock %}
+{% block title %}Управление пользователями - PM Desk{% endblock %}
 
 {% block content %}
 <div class="dashboard">
@@ -288,20 +288,7 @@
 </div>
 
 <script>
-// Подтверждение действий
-document.querySelectorAll('form').forEach(form => {
-    form.addEventListener('submit', function(e) {
-        const statusInput = this.querySelector('input[name="status"]');
-        if (statusInput) {
-            const status = statusInput.value;
-            const action = status === 'approved' ? 'подтвердить' : 'отклонить';
-            
-            if (!confirm(`Вы уверены, что хотите ${action} этого пользователя?`)) {
-                e.preventDefault();
-            }
-        }
-    });
-});
+// Подтверждение действий будет обрабатываться в DOMContentLoaded
 
 // Функции для модального окна блокировки
 function showBlockModal(userId, userName) {
@@ -575,7 +562,7 @@ function createUserRow(user) {
         `;
     } else if (user.status === 'approved') {
         actionsHtml = `
-            <button class="btn btn-sm btn-warning" onclick="openBlockModal(${user.id}, '${user.full_name}')" title="Заблокировать">
+            <button class="btn btn-sm btn-warning" onclick="showBlockModal(${user.id}, '${user.full_name}')" title="Заблокировать">
                 <i class="fas fa-ban"></i>
             </button>
             <button type="button" class="btn btn-sm btn-info" title="Изменить роль"

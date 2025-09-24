@@ -43,7 +43,7 @@ class InputValidator:
     @classmethod
     def validate_car_number(cls, car_number: str) -> Tuple[bool, Optional[str]]:
         """
-        Валидация номера автомобиля
+        Валидация номера автомобиля (строгая для полного номера)
         Args:
             car_number: Номер автомобиля для проверки
         Returns:
@@ -56,6 +56,29 @@ class InputValidator:
             return False, f"Номер автомобиля слишком длинный (максимум {cls.MAX_CAR_NUMBER_LENGTH} символов)"
         if not re.match(cls.CAR_NUMBER_PATTERN, clean_number):
             return False, "Неверный формат номера автомобиля. Используйте формат: А123БВ777 или A123BC777"
+        return True, None
+    
+    @classmethod
+    def validate_car_number_search(cls, car_number: str) -> Tuple[bool, Optional[str]]:
+        """
+        Валидация номера автомобиля для поиска (более гибкая, поддерживает частичный поиск)
+        Args:
+            car_number: Номер автомобиля для поиска (может быть частичным)
+        Returns:
+            Tuple[bool, Optional[str]]: (валидность, ошибка)
+        """
+        if not car_number or not isinstance(car_number, str):
+            return False, "Номер автомобиля не может быть пустым"
+        clean_number = car_number.strip().upper()
+        if len(clean_number) < 1:
+            return False, "Номер автомобиля не может быть пустым"
+        if len(clean_number) > cls.MAX_CAR_NUMBER_LENGTH:
+            return False, f"Номер автомобиля слишком длинный (максимум {cls.MAX_CAR_NUMBER_LENGTH} символов)"
+        
+        # Проверяем, что содержит только допустимые символы
+        if not re.match(r'^[А-Яа-яA-Za-z0-9]*$', clean_number):
+            return False, "Номер автомобиля может содержать только буквы и цифры"
+        
         return True, None
     @classmethod
     def validate_name(cls, name: str) -> Tuple[bool, Optional[str]]:
@@ -154,6 +177,38 @@ class InputValidator:
             'full_name': full_name,
             'phone_number': normalized_phone,
             'apartment': apartment
+        }
+    
+    @classmethod
+    def validate_staff_registration_data(cls, data: str) -> Tuple[bool, Optional[str], Optional[Dict[str, str]]]:
+        """
+        Валидация данных регистрации персонала в формате "ФИО, Телефон" (без квартиры)
+        Args:
+            data: Строка с данными регистрации
+        Returns:
+            Tuple[bool, Optional[str], Optional[Dict[str, str]]]: (валидность, ошибка, данные)
+        """
+        if not data or not isinstance(data, str):
+            return False, "Данные регистрации не могут быть пустыми", None
+        # Разделяем по запятой
+        parts = [part.strip() for part in data.split(',')]
+        if len(parts) != 2:
+            return False, "Неверный формат. Отправьте: ФИО, Телефон", None
+        full_name, phone = parts
+        # Валидируем каждое поле
+        name_valid, name_error = cls.validate_name(full_name)
+        if not name_valid:
+            return False, name_error, None
+        phone_valid, phone_error = cls.validate_phone(phone)
+        if not phone_valid:
+            return False, phone_error, None
+        # Нормализуем номер телефона
+        from ..utils.phone_normalizer import normalize_phone_number
+        normalized_phone = normalize_phone_number(phone)
+        
+        return True, None, {
+            'full_name': full_name,
+            'phone_number': normalized_phone
         }
     @classmethod
     def sanitize_input(cls, text: str) -> str:

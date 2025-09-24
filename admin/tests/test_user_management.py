@@ -85,7 +85,7 @@ class TestUserManagement:
         """Тест блокировки пользователя"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -106,7 +106,7 @@ class TestUserManagement:
         """Тест разблокировки пользователя"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -123,7 +123,7 @@ class TestUserManagement:
         """Тест удаления пользователя"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -140,7 +140,7 @@ class TestUserManagement:
         """Тест страницы пользователей с новым статусом"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")

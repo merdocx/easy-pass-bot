@@ -15,7 +15,7 @@ import aiosqlite
 import logging
 
 # Добавляем путь к основному проекту
-sys.path.append('/root/easy_pass_bot/src')
+sys.path.append('/root/easy-pass-bot/src')
 
 from easy_pass_bot.database.models import User, Pass
 from easy_pass_bot.database.database import Database
@@ -24,11 +24,11 @@ from easy_pass_bot.database.database import Database
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Easy Pass Admin Panel", version="1.0.0")
+app = FastAPI(title="PM Desk Admin Panel", version="1.0.0")
 
 # Подключение статических файлов и шаблонов
-app.mount("/static", StaticFiles(directory="/root/easy_pass_bot/admin/static"), name="static")
-templates = Jinja2Templates(directory="/root/easy_pass_bot/admin/templates")
+app.mount("/static", StaticFiles(directory="/root/easy-pass-bot/admin/static"), name="static")
+templates = Jinja2Templates(directory="/root/easy-pass-bot/admin/templates")
 
 
 # Защищенные маршруты (требуют авторизации)
@@ -52,7 +52,7 @@ async def auth_middleware(request: Request, call_next):
     return response
 
 # Инициализация базы данных
-db = Database('/root/easy_pass_bot/database/easy_pass.db')
+db = Database('/root/easy-pass-bot/database/easy_pass.db')
 
 # Секретный ключ для сессий (в продакшене должен быть в переменных окружения)
 SECRET_KEY = "easy_pass_admin_secret_key_2024"
@@ -75,7 +75,7 @@ class AdminAuth:
             logger.error(f"Error normalizing phone {phone}: {e}")
             return phone
     
-    async def verify_admin_credentials(self, phone: str, password: str) -> Optional['Admin']:
+    async def verify_admin_credentials(self, phone: str, password: str) -> Optional['User']:
         """Проверка учетных данных администратора"""
         try:
             # Нормализуем номер телефона
@@ -92,14 +92,13 @@ class AdminAuth:
                 logger.warning(f"Invalid password for admin: {admin.full_name}")
                 return None
             
-            # Проверяем, что связанный пользователь имеет роль admin
-            user = await self.db.get_user_by_id(admin.user_id)
-            if not user or user.role != 'admin':
-                logger.warning(f"User {admin.user_id} is not admin role")
+            # Проверяем, что пользователь является администратором
+            if not admin.is_admin:
+                logger.warning(f"User {admin.id} is not admin")
                 return None
             
-            # Обновляем время последнего входа
-            await self.db.update_admin_last_login(admin.id)
+            # Обновляем время последнего входа (пока не реализовано)
+            # await self.db.update_admin_last_login(admin.id)
             
             logger.info(f"Admin {admin.full_name} successfully authenticated")
             return admin
@@ -108,12 +107,12 @@ class AdminAuth:
             logger.error(f"Error verifying admin credentials: {e}")
             return None
     
-    def create_admin_session(self, admin: 'Admin') -> str:
+    def create_admin_session(self, admin: 'User') -> str:
         """Создание сессии для администратора"""
         session_id = secrets.token_urlsafe(32)
         active_sessions[session_id] = {
             "admin_id": admin.id,
-            "user_id": admin.user_id,
+            "user_id": admin.id,  # Теперь user_id = admin.id
             "full_name": admin.full_name,
             "phone_number": admin.phone_number,
             "created_at": datetime.now(),
@@ -148,21 +147,6 @@ class AdminAuth:
         session = self.get_session_admin(session_id)
         return session.get("user_id") if session else None
     
-    # Методы для обратной совместимости (будут удалены в будущем)
-    def verify_password(self, password: str) -> bool:
-        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
-        logger.warning("Using deprecated verify_password method")
-        return False
-    
-    def create_session(self, username: str) -> str:
-        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
-        logger.warning("Using deprecated create_session method")
-        return ""
-    
-    def get_session_user(self, session_id: str) -> Optional[str]:
-        """УСТАРЕВШИЙ МЕТОД - используется только для совместимости"""
-        session = self.get_session_admin(session_id)
-        return session.get("full_name") if session else None
 
 admin_auth = AdminAuth(db)
 
@@ -171,7 +155,8 @@ async def get_current_user(request: Request) -> Optional[str]:
     session_id = request.cookies.get("admin_session")
     if not session_id or not admin_auth.verify_session(session_id):
         return None
-    return admin_auth.get_session_user(session_id)
+    session = admin_auth.get_session_admin(session_id)
+    return session.get("full_name") if session else None
 
 async def get_current_admin(request: Request) -> Optional[Dict[str, Any]]:
     """Получение данных текущего администратора из сессии"""
@@ -243,12 +228,12 @@ async def login_page_alt(request: Request):
     })
 
 @app.post("/login")
-async def login(request: Request, username: str = Form(...), password: str = Form(...), redirect_url: str = Form("/dashboard")):
+async def login(request: Request, phone_number: str = Form(...), password: str = Form(...), redirect_url: str = Form("/dashboard")):
     """Обработка авторизации"""
     
     try:
-        # Нормализуем username (номер телефона) и проверяем учетные данные
-        admin = await admin_auth.verify_admin_credentials(username, password)
+        # Нормализуем номер телефона и проверяем учетные данные
+        admin = await admin_auth.verify_admin_credentials(phone_number, password)
         
         if admin:
             # Создаем сессию для администратора
@@ -265,7 +250,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
             logger.info(f"Admin {admin.full_name} logged in successfully")
             return response
         else:
-            logger.warning(f"Failed login attempt with username: {username}")
+            logger.warning(f"Failed login attempt with phone: {phone_number}")
             return templates.TemplateResponse(
             "login.html", 
             {
@@ -366,8 +351,44 @@ async def update_user_status(
         if status not in ['pending', 'approved', 'rejected']:
             raise HTTPException(status_code=400, detail="Неверный статус")
         
+        # Получаем пользователя для отправки уведомления
+        user = await db.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
         await db.update_user_status(user_id, status)
         logger.info(f"Admin {current_user} updated user {user_id} status to {status}")
+        
+        # Отправляем уведомление пользователю
+        try:
+            from easy_pass_bot.utils.notifications import notify_user_approved, notify_user_rejected
+            from aiogram import Bot
+            from aiogram.client.default import DefaultBotProperties
+            from aiogram.enums import ParseMode
+            import os
+            
+            bot_token = os.getenv('BOT_TOKEN')
+            if bot_token and user.telegram_id:
+                notification_bot = Bot(
+                    token=bot_token,
+                    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+                )
+                
+                if status == 'approved':
+                    await notify_user_approved(notification_bot, user)
+                    logger.info(f"Approval notification sent to user {user.full_name} (TG: {user.telegram_id})")
+                elif status == 'rejected':
+                    await notify_user_rejected(notification_bot, user)
+                    logger.info(f"Rejection notification sent to user {user.full_name} (TG: {user.telegram_id})")
+                
+                await notification_bot.session.close()
+            else:
+                if not bot_token:
+                    logger.warning("BOT_TOKEN not found, cannot send notification")
+                if not user.telegram_id:
+                    logger.warning(f"User {user.full_name} has no Telegram ID, cannot send notification")
+        except Exception as e:
+            logger.error(f"Failed to send notification to user {user_id}: {e}")
         
         return RedirectResponse(url="/users", status_code=302)
     except Exception as e:
@@ -562,8 +583,8 @@ async def change_user_role(
     """Изменение роли пользователя"""
     try:
         # Проверяем, что текущий пользователь - админ
-        current_user_obj = await db.get_user_by_username(current_user)
-        if not current_user_obj or current_user_obj.role != 'admin':
+        current_user_obj = await db.get_admin_user()
+        if not current_user_obj or not current_user_obj.is_admin:
             logger.warning(f"Non-admin user {current_user} attempted to change role")
             raise HTTPException(status_code=403, detail="Только администраторы могут изменять роли")
         
@@ -597,8 +618,8 @@ async def change_user_role(
         # Если роль изменилась с admin на другую, деактивируем админа
         if old_role == 'admin' and new_role != 'admin':
             try:
-                # Деактивируем админа
-                await db.deactivate_admin(user_id)
+                # Убираем права администратора
+                await db.remove_admin_rights(user_id)
                 logger.info(f"Deactivated admin for user {user.full_name} (ID: {user_id}) after role change to {new_role}")
             except Exception as e:
                 logger.error(f"Failed to deactivate admin for user {user_id}: {e}")
@@ -607,8 +628,8 @@ async def change_user_role(
         if new_role == 'admin':
             try:
                 # Проверяем, есть ли уже админ с этим user_id
-                existing_admin = await db.get_admin_by_user_id(user_id)
-                if not existing_admin:
+                existing_admin = await db.get_user_by_id(user_id)
+                if not existing_admin or not existing_admin.is_admin:
                     # Создаем нового админа
                     from easy_pass_bot.utils.password_generator import generate_secure_password, hash_password
                     from easy_pass_bot.utils.telegram_notifier import TelegramNotifier
@@ -621,28 +642,9 @@ async def change_user_role(
                     from easy_pass_bot.utils.phone_normalizer import normalize_phone_number
                     normalized_phone = normalize_phone_number(user.phone_number)
                     
-                    # Создаем админа
-                    from easy_pass_bot.database.models import Admin
-                    
-                    new_admin = Admin(
-                        username=normalized_phone,
-                        full_name=user.full_name,
-                        password_hash=password_hash,
-                        role='admin',
-                        is_active=True,
-                        user_id=user_id,
-                        phone_number=normalized_phone
-                    )
-                    
-                    admin_id = await db.create_admin(
-                        username=new_admin.username,
-                        full_name=new_admin.full_name,
-                        password_hash=new_admin.password_hash,
-                        user_id=new_admin.user_id,
-                        phone_number=new_admin.phone_number,
-                        role=new_admin.role
-                    )
-                    logger.info(f"Created admin record for user {user.full_name} (ID: {user_id}) with admin ID {admin_id}")
+                    # Делаем пользователя администратором
+                    admin_created = await db.make_user_admin(user_id, password_hash)
+                    logger.info(f"Created admin record for user {user.full_name} (ID: {user_id})")
                     
                     # Отправляем уведомление в Telegram
                     try:

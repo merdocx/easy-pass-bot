@@ -28,7 +28,7 @@ done
 
 # Переходим в директорию админки и запускаем
 echo "🚀 Запуск админки..."
-cd /root/easy_pass_bot/admin
+cd /root/easy-pass-bot/admin
 
 # Запускаем в фоновом режиме
 nohup python start_admin.py > /dev/null 2>&1 &

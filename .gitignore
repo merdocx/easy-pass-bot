@@ -165,11 +165,14 @@ cython_debug/
 # VS Code
 .vscode/
 
-# Easy Pass Bot specific
+# PM Desk specific
 database/easy_pass.db
 database/easy_pass.db-journal
+database/*backup*.db
+database/*.backup*
 logs/*.log
 logs/security_alerts.json
+cookies.txt
 *.json
 !requirements*.json
 !package*.json

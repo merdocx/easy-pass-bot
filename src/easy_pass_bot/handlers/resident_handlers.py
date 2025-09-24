@@ -2,7 +2,7 @@ import logging
 import asyncio
 import time
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.filters import Command
 from ..database import db
 from ..database.models import User, Pass
@@ -49,14 +49,17 @@ async def start_command(message: Message):
         elif user.role == ROLES['RESIDENT'] and user.status == USER_STATUSES['APPROVED']:
             analytics_service.track_page_view(user_id, "resident_main_menu")
             navigation_service.add_to_history(user_id, "resident_main_menu")
-            await message.answer("🏠 Добро пожаловать в Easy Pass!", reply_markup=get_approved_user_keyboard())
+            await message.answer("🏠 Добро пожаловать в PM Desk!", reply_markup=get_approved_user_keyboard())
+        elif user.role == ROLES['ADMIN'] and user.status == USER_STATUSES['APPROVED']:
+            await message.answer(
+                "👑 Добро пожаловать в панель администратора PM Desk. Здесь вы сможете управлять входящими заявками на регистрацию в системе.",
+                reply_markup=ReplyKeyboardRemove()
+            )
         elif user.role == ROLES['SECURITY'] and user.status == USER_STATUSES['APPROVED']:
             analytics_service.track_page_view(user_id, "security_main_menu")
             navigation_service.add_to_history(user_id, "security_main_menu")
             from ..keyboards.security_keyboards import get_security_main_menu
             await message.answer("Нажмите на кнопку \"🔍 Найти пропуск\" для поиска заявки. После открытия шлагбаума отметьте пропуск как использованный, нажав \"✅\" под пропуском.", reply_markup=get_security_main_menu())
-        elif user.role == ROLES['ADMIN'] and user.status == USER_STATUSES['APPROVED']:
-            await message.answer("👑 Панель администратора Easy Pass\n\nВы будете получать уведомления о новых заявках на регистрацию.\nДля модерации используйте кнопки в уведомлениях.")
     except Exception as e:
         # Обрабатываем ошибку через централизованный обработчик
         error_response = await error_handler.handle_error(e, {'user_id': user_id, 'action': 'start_command'})
@@ -162,7 +165,7 @@ async def handle_cancel_pass_creation_message(message: Message):
         return
     # Заменяем клавиатуру на главное меню
     keyboard = get_approved_user_keyboard()
-    await message.answer("✅ Создание заявки отменено\n\n🏠 Добро пожаловать в Easy Pass!", reply_markup=keyboard)
+    await message.answer("✅ Создание заявки отменено\n\n🏠 Добро пожаловать в PM Desk!", reply_markup=keyboard)
     logger.info(f"User {message.from_user.id} returned to main menu")
 @router.message(F.text == "📋 Мои заявки")
 

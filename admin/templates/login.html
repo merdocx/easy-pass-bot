@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Вход в админку - Easy Pass Admin{% endblock %}
+{% block title %}Вход в админку - PM Desk{% endblock %}
 
 {% block content %}
 <div class="login-container">
     <div class="login-card">
         <div class="login-header">
-            <h1><i class="fas fa-shield-alt"></i> Easy Pass Admin</h1>
+            <h1><i class="fas fa-shield-alt"></i> PM Desk</h1>
             <p>Панель управления системой пропусков</p>
         </div>
         
@@ -22,11 +22,11 @@
             <input type="hidden" name="redirect_url" value="{{ redirect_url or '/dashboard' }}">
             
             <div class="form-group">
-                <label for="username">
+                <label for="phone_number">
                     <i class="fas fa-phone"></i>
                     Номер телефона
                 </label>
-                <input type="text" id="username" name="username" required 
+                <input type="text" id="phone_number" name="phone_number" required 
                        placeholder="+7 999 999 99 99" 
                        pattern="[\+]?[7-8]?[\s\-\(\)]?[0-9\s\-\(\)]{10,15}"
                        title="Введите номер телефона в формате +7 999 999 99 99">

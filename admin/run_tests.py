@@ -10,7 +10,7 @@ import pytest
 
 def main():
     """Запуск тестов"""
-    print("🧪 Запуск тестов Easy Pass Admin Panel...")
+    print("🧪 Запуск тестов PM Desk Admin Panel...")
     print("=" * 50)
     
     # Добавляем пути

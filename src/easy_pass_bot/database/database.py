@@ -145,7 +145,7 @@ class Database:
         """Внутренний метод получения пользователя по Telegram ID"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash
                 FROM users WHERE telegram_id = ?
             """, (telegram_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -154,14 +154,14 @@ class Database:
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
                         blocked_until=row[7], block_reason=row[8],
-                        created_at=row[9], updated_at=row[10]
+                        created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                     )
                 return None
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Получение пользователя по ID"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash
                 FROM users WHERE id = ?
             """, (user_id,)) as cursor:
                 row = await cursor.fetchone()
@@ -170,47 +170,95 @@ class Database:
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
                         blocked_until=row[7], block_reason=row[8],
-                        created_at=row[9], updated_at=row[10]
+                        created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                     )
                 return None
     async def update_user_status(self, user_id: int, status: str):
         """Обновление статуса пользователя"""
+        # Сначала получаем пользователя для очистки кэша
+        user = await self.get_user_by_id(user_id)
+        
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE users SET status = ?, updated_at = ? WHERE id = ?
             """, (status, datetime.now(), user_id))
             await db.commit()
+        
+        # Очищаем кэш пользователя
+        if user:
+            cache_key = f"user_telegram_id:{user.telegram_id}"
+            await cache_service.delete(cache_key)
+            # Также очищаем кэш по ID
+            cache_key_id = f"user_id:{user_id}"
+            await cache_service.delete(cache_key_id)
+            logger.info(f"Cleared cache for user {user.full_name} (ID: {user_id}) after status update to {status}")
     
     async def block_user(self, user_id: int, blocked_until: str, block_reason: str):
         """Блокировка пользователя"""
+        # Сначала получаем пользователя для очистки кэша
+        user = await self.get_user_by_id(user_id)
+        
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE users SET status = 'blocked', blocked_until = ?, block_reason = ?, updated_at = ? WHERE id = ?
             """, (blocked_until, block_reason, datetime.now(), user_id))
             await db.commit()
+        
+        # Очищаем кэш пользователя
+        if user:
+            cache_key = f"user_telegram_id:{user.telegram_id}"
+            await cache_service.delete(cache_key)
+            # Также очищаем кэш по ID
+            cache_key_id = f"user_id:{user_id}"
+            await cache_service.delete(cache_key_id)
+            logger.info(f"Cleared cache for blocked user {user.full_name} (ID: {user_id})")
     
     async def unblock_user(self, user_id: int):
         """Разблокировка пользователя"""
+        # Сначала получаем пользователя для очистки кэша
+        user = await self.get_user_by_id(user_id)
+        
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE users SET status = 'approved', blocked_until = NULL, block_reason = NULL, updated_at = ? WHERE id = ?
             """, (datetime.now(), user_id))
             await db.commit()
+        
+        # Очищаем кэш пользователя
+        if user:
+            cache_key = f"user_telegram_id:{user.telegram_id}"
+            await cache_service.delete(cache_key)
+            # Также очищаем кэш по ID
+            cache_key_id = f"user_id:{user_id}"
+            await cache_service.delete(cache_key_id)
+            logger.info(f"Cleared cache for unblocked user {user.full_name} (ID: {user_id})")
     
     async def delete_user(self, user_id: int):
         """Удаление пользователя"""
+        # Сначала получаем пользователя для очистки кэша
+        user = await self.get_user_by_id(user_id)
+        
         async with aiosqlite.connect(self.db_path) as db:
             # Сначала удаляем все пропуски пользователя
             await db.execute("DELETE FROM passes WHERE user_id = ?", (user_id,))
             # Затем удаляем самого пользователя
             await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()
+        
+        # Очищаем кэш пользователя
+        if user:
+            cache_key = f"user_telegram_id:{user.telegram_id}"
+            await cache_service.delete(cache_key)
+            # Также очищаем кэш по ID
+            cache_key_id = f"user_id:{user_id}"
+            await cache_service.delete(cache_key_id)
+            logger.info(f"Cleared cache for deleted user {user.full_name} (ID: {user_id})")
     async def get_admin_users(self) -> List[User]:
         """Получение всех администраторов"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
-                FROM users WHERE role = 'admin' AND status = 'approved'
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash
+                FROM users WHERE is_admin = 1 AND status = 'approved'
             """) as cursor:
                 rows = await cursor.fetchall()
                 return [
@@ -218,14 +266,14 @@ class Database:
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
                         blocked_until=row[7], block_reason=row[8],
-                        created_at=row[9], updated_at=row[10]
+                        created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                     ) for row in rows
                 ]
     async def get_pending_users(self) -> List[User]:
         """Получение пользователей на модерации"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash
                 FROM users WHERE role = 'resident' AND status = 'pending'
                 ORDER BY created_at ASC
             """) as cursor:
@@ -235,14 +283,14 @@ class Database:
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
                         blocked_until=row[7], block_reason=row[8],
-                        created_at=row[9], updated_at=row[10]
+                        created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                     ) for row in rows
                 ]
     async def get_all_users(self) -> List[User]:
         """Получение всех пользователей"""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("""
-                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at
+                SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash
                 FROM users
                 ORDER BY 
                     CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
@@ -254,7 +302,7 @@ class Database:
                         id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
                         phone_number=row[4], apartment=row[5], status=row[6],
                         blocked_until=row[7], block_reason=row[8],
-                        created_at=row[9], updated_at=row[10]
+                        created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                     ) for row in rows
                 ]
     async def create_pass(self, pass_obj: Pass) -> int:
@@ -643,40 +691,25 @@ class Database:
                 
                 return passes, total_count
 
-    async def get_user_by_username(self, username: str) -> Optional[User]:
-        """Получить пользователя по username (для админки)"""
+    async def get_admin_user(self) -> Optional[User]:
+        """Получить администратора (для админки)"""
         try:
-            # Для админки username = "admin", ищем пользователя с ролью admin
-            if username == "admin":
-                async with aiosqlite.connect(self.db_path) as db:
-                    async with db.execute(
-                        "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at FROM users WHERE role = 'admin' LIMIT 1",
-                        ()
-                    ) as cursor:
-                        row = await cursor.fetchone()
-                        if row:
-                            return User(
-                                id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
-                                phone_number=row[4], apartment=row[5], status=row[6],
-                                created_at=row[7], updated_at=row[8]
-                            )
-            else:
-                # Для других пользователей ищем по full_name
-                async with aiosqlite.connect(self.db_path) as db:
-                    async with db.execute(
-                        "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, created_at, updated_at FROM users WHERE full_name = ?",
-                        (username,)
-                    ) as cursor:
-                        row = await cursor.fetchone()
-                        if row:
-                            return User(
-                                id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
-                                phone_number=row[4], apartment=row[5], status=row[6],
-                                created_at=row[7], updated_at=row[8]
-                            )
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash FROM users WHERE is_admin = 1 LIMIT 1",
+                    ()
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        return User(
+                            id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
+                            phone_number=row[4], apartment=row[5], status=row[6],
+                            blocked_until=row[7], block_reason=row[8],
+                            created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
+                        )
             return None
         except Exception as e:
-            logger.error(f"Error getting user by username {username}: {e}")
+            logger.error(f"Error getting admin user: {e}")
             return None
 
     async def change_user_role(self, user_id: int, new_role: str) -> bool:
@@ -705,129 +738,69 @@ class Database:
 
     # ==================== МЕТОДЫ ДЛЯ РАБОТЫ С АДМИНИСТРАТОРАМИ ====================
     
-    async def get_admin_by_phone(self, phone_number: str) -> Optional['Admin']:
+    async def get_admin_by_phone(self, phone_number: str) -> Optional[User]:
         """Получить администратора по номеру телефона"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(
-                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE phone_number = ? AND is_active = 1",
+                    "SELECT id, telegram_id, role, full_name, phone_number, apartment, status, blocked_until, block_reason, created_at, updated_at, is_admin, password_hash FROM users WHERE phone_number = ? AND is_admin = 1 AND status = 'approved'",
                     (phone_number,)
                 ) as cursor:
                     row = await cursor.fetchone()
                     if row:
-                        from .models import Admin
-                        return Admin(
-                            id=row[0], username=row[1], full_name=row[2],
-                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
-                            created_at=row[6], updated_at=row[7], last_login=row[8],
-                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
+                        return User(
+                            id=row[0], telegram_id=row[1], role=row[2], full_name=row[3],
+                            phone_number=row[4], apartment=row[5], status=row[6],
+                            blocked_until=row[7], block_reason=row[8],
+                            created_at=row[9], updated_at=row[10], is_admin=bool(row[11]), password_hash=row[12]
                         )
         except Exception as e:
             logger.error(f"Error getting admin by phone {phone_number}: {e}")
         return None
 
-    async def get_admin_by_user_id(self, user_id: int) -> Optional['Admin']:
-        """Получить администратора по ID пользователя"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                async with db.execute(
-                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE user_id = ? AND is_active = 1",
-                    (user_id,)
-                ) as cursor:
-                    row = await cursor.fetchone()
-                    if row:
-                        from .models import Admin
-                        return Admin(
-                            id=row[0], username=row[1], full_name=row[2],
-                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
-                            created_at=row[6], updated_at=row[7], last_login=row[8],
-                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
-                        )
-        except Exception as e:
-            logger.error(f"Error getting admin by user_id {user_id}: {e}")
-        return None
-
-    async def create_admin(self, username: str, full_name: str, password_hash: str, 
-                          user_id: int, phone_number: str, role: str = "admin") -> bool:
-        """Создать нового администратора"""
+    async def make_user_admin(self, user_id: int, password_hash: str) -> bool:
+        """Сделать пользователя администратором"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
-                    """INSERT INTO admins (username, full_name, password_hash, role, is_active, created_at, updated_at, user_id, phone_number, last_login_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (username, full_name, password_hash, role, True, 
-                     datetime.now(), datetime.now(), user_id, phone_number, None)
+                    "UPDATE users SET is_admin = 1, password_hash = ?, updated_at = ? WHERE id = ?",
+                    (password_hash, datetime.now(), user_id)
                 )
                 await db.commit()
-                logger.info(f"Admin created for user_id {user_id} with phone {phone_number}")
+                logger.info(f"User {user_id} made admin")
                 return True
         except Exception as e:
-            logger.error(f"Error creating admin for user_id {user_id}: {e}")
+            logger.error(f"Error making user {user_id} admin: {e}")
             return False
 
-    async def update_admin_password(self, admin_id: int, new_password_hash: str) -> bool:
+    async def remove_admin_rights(self, user_id: int) -> bool:
+        """Убрать права администратора у пользователя"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE users SET is_admin = 0, password_hash = NULL, updated_at = ? WHERE id = ?",
+                    (datetime.now(), user_id)
+                )
+                await db.commit()
+                logger.info(f"Admin rights removed from user {user_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error removing admin rights from user {user_id}: {e}")
+            return False
+
+    async def update_admin_password(self, user_id: int, new_password_hash: str) -> bool:
         """Обновить пароль администратора"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
-                    "UPDATE admins SET password_hash = ?, updated_at = ? WHERE id = ?",
-                    (new_password_hash, datetime.now(), admin_id)
+                    "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND is_admin = 1",
+                    (new_password_hash, datetime.now(), user_id)
                 )
                 await db.commit()
-                logger.info(f"Admin password updated for admin_id {admin_id}")
+                logger.info(f"Admin password updated for user_id {user_id}")
                 return True
         except Exception as e:
-            logger.error(f"Error updating admin password for admin_id {admin_id}: {e}")
-            return False
-
-    async def update_admin_last_login(self, admin_id: int) -> bool:
-        """Обновить время последнего входа администратора"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    "UPDATE admins SET last_login_at = ?, last_login = ? WHERE id = ?",
-                    (datetime.now(), datetime.now(), admin_id)
-                )
-                await db.commit()
-                return True
-        except Exception as e:
-            logger.error(f"Error updating admin last login for admin_id {admin_id}: {e}")
-            return False
-
-    async def get_all_admins(self) -> List['Admin']:
-        """Получить всех активных администраторов"""
-        try:
-            admins = []
-            async with aiosqlite.connect(self.db_path) as db:
-                async with db.execute(
-                    "SELECT id, username, full_name, password_hash, role, is_active, created_at, updated_at, last_login, user_id, phone_number, last_login_at FROM admins WHERE is_active = 1 ORDER BY created_at DESC"
-                ) as cursor:
-                    async for row in cursor:
-                        from .models import Admin
-                        admins.append(Admin(
-                            id=row[0], username=row[1], full_name=row[2],
-                            password_hash=row[3], role=row[4], is_active=bool(row[5]),
-                            created_at=row[6], updated_at=row[7], last_login=row[8],
-                            user_id=row[9], phone_number=row[10], last_login_at=row[11]
-                        ))
-            return admins
-        except Exception as e:
-            logger.error(f"Error getting all admins: {e}")
-            return []
-
-    async def deactivate_admin(self, admin_id: int) -> bool:
-        """Деактивировать администратора"""
-        try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute(
-                    "UPDATE admins SET is_active = 0, updated_at = ? WHERE id = ?",
-                    (datetime.now(), admin_id)
-                )
-                await db.commit()
-                logger.info(f"Admin deactivated: admin_id {admin_id}")
-                return True
-        except Exception as e:
-            logger.error(f"Error deactivating admin {admin_id}: {e}")
+            logger.error(f"Error updating admin password for user_id {user_id}: {e}")
             return False
 
 # Глобальный экземпляр базы данных

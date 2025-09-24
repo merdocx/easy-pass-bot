@@ -10,14 +10,14 @@ import uvicorn
 from pathlib import Path
 
 # Добавляем путь к основному проекту
-sys.path.append('/root/easy_pass_bot/src')
+sys.path.append('/root/easy-pass-bot/src')
 
 async def main():
     """Основная функция запуска"""
-    print("🚀 Запуск Easy Pass Admin Panel...")
+    print("🚀 Запуск PM Desk Admin Panel...")
     
     # Проверяем наличие базы данных
-    db_path = "/root/easy_pass_bot/database/easy_pass.db"
+    db_path = "/root/easy-pass-bot/database/easy_pass.db"
     if not os.path.exists(db_path):
         print("❌ База данных не найдена. Создаем...")
         from easy_pass_bot.database.database import db

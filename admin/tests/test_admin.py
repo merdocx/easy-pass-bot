@@ -13,7 +13,7 @@ from admin.main import app, admin_auth, db
 from easy_pass_bot.database.models import User
 
 class TestAdminPanel:
-    """Тесты для веб-админки Easy Pass"""
+    """Тесты для веб-админки PM Desk"""
     
     @pytest.fixture
     def client(self):
@@ -27,7 +27,7 @@ class TestAdminPanel:
              patch.object(db, 'get_all_passes') as mock_passes, \
              patch.object(db, 'update_user_status') as mock_update, \
              patch.object(db, 'get_user_by_id') as mock_get_user, \
-             patch.object(db, 'get_user_by_username') as mock_get_user_by_username, \
+             patch.object(db, 'get_admin_user') as mock_get_admin_user, \
              patch.object(db, 'change_user_role') as mock_change_user_role, \
              patch.object(admin_auth, 'verify_session') as mock_verify_session, \
              patch.object(admin_auth, 'get_session_user') as mock_get_session_user:
@@ -93,7 +93,7 @@ class TestAdminPanel:
                 'passes': mock_passes,
                 'update': mock_update,
                 'get_user': mock_get_user,
-                'get_user_by_username': mock_get_user_by_username,
+                'get_admin_user': mock_get_admin_user,
                 'change_user_role': mock_change_user_role,
                 'verify_session': mock_verify_session,
                 'get_session_user': mock_get_session_user
@@ -103,13 +103,13 @@ class TestAdminPanel:
         """Тест доступа к странице авторизации"""
         response = client.get("/")
         assert response.status_code == 200
-        assert "Easy Pass Admin" in response.text
+        assert "PM Desk" in response.text
         assert "Войти" in response.text
     
     def test_login_success(self, client):
         """Тест успешной авторизации"""
         response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         # В тестовой среде может быть редирект или успешный ответ
@@ -123,7 +123,7 @@ class TestAdminPanel:
     def test_login_failure(self, client):
         """Тест неуспешной авторизации"""
         response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "wrong_password"
         })
         assert response.status_code == 200
@@ -139,7 +139,7 @@ class TestAdminPanel:
         """Тест доступа к странице пользователей с авторизацией"""
         # Сначала авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         
@@ -157,7 +157,7 @@ class TestAdminPanel:
         """Тест доступа к странице пропусков с авторизацией"""
         # Сначала авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         
@@ -175,7 +175,7 @@ class TestAdminPanel:
         """Тест обновления статуса пользователя"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -194,7 +194,7 @@ class TestAdminPanel:
         """Тест выхода из системы"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -202,13 +202,13 @@ class TestAdminPanel:
         # Выходим
         response = client.get("/logout", cookies={"admin_session": session_cookie}, follow_redirects=True)
         assert response.status_code == 200
-        assert "Easy Pass Admin" in response.text
+        assert "PM Desk" in response.text
     
     def test_api_users_endpoint(self, client, mock_db):
         """Тест API endpoint для пользователей"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -225,7 +225,7 @@ class TestAdminPanel:
         """Тест API endpoint для пропусков"""
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -299,12 +299,12 @@ class TestAdminPanel:
         )
         
         mock_db['get_user'].return_value = mock_user
-        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['get_admin_user'].return_value = mock_current_admin
         mock_db['change_user_role'].return_value = True
         
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -320,7 +320,7 @@ class TestAdminPanel:
         assert response.status_code == 200
         
         # Проверяем, что методы были вызваны
-        mock_db['get_user_by_username'].assert_called_once_with("admin")
+        mock_db['get_admin_user'].assert_called_once()
         mock_db['get_user'].assert_called_once_with(1)
         mock_db['change_user_role'].assert_called_once_with(1, "security")
 
@@ -333,11 +333,11 @@ class TestAdminPanel:
             created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
         )
         
-        mock_db['get_user_by_username'].return_value = mock_current_user
+        mock_db['get_admin_user'].return_value = mock_current_user
         
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -369,11 +369,11 @@ class TestAdminPanel:
         )
         
         mock_db['get_user'].return_value = mock_user
-        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['get_admin_user'].return_value = mock_current_admin
         
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -400,11 +400,11 @@ class TestAdminPanel:
         )
         
         mock_db['get_user'].return_value = mock_current_admin
-        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['get_admin_user'].return_value = mock_current_admin
         
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")
@@ -430,12 +430,12 @@ class TestAdminPanel:
             created_at='2024-01-01 00:00:00', updated_at='2024-01-01 00:00:00'
         )
         
-        mock_db['get_user_by_username'].return_value = mock_current_admin
+        mock_db['get_admin_user'].return_value = mock_current_admin
         mock_db['get_user'].return_value = None
         
         # Авторизуемся
         login_response = client.post("/login", data={
-            "username": "admin",
+            "phone_number": "+7 909 929 70 70",
             "password": "admin123"
         })
         session_cookie = login_response.cookies.get("admin_session")

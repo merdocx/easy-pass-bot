@@ -1,4 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from .resident_keyboards import get_approved_user_keyboard
 
 def get_security_main_menu() -> ReplyKeyboardMarkup:
     """Главное меню охраны"""
@@ -29,8 +30,14 @@ def get_passes_list_keyboard(passes) -> InlineKeyboardMarkup:
         button_text = f"✅ {pass_obj.car_number}"
         callback_data = f"use_pass_{pass_obj.id}"
         keyboard_buttons.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
-    # Добавляем кнопку "Найти другой пропуск"
-    keyboard_buttons.append([InlineKeyboardButton(text="🔍 Найти другой пропуск", callback_data="search_another")])
+    
+    # Добавляем кнопки управления
+    control_buttons = [
+        InlineKeyboardButton(text="🔍 Найти другой пропуск", callback_data="search_another"),
+        InlineKeyboardButton(text="🔙 Главное меню", callback_data="back_to_main")
+    ]
+    keyboard_buttons.append(control_buttons)
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     return keyboard
 

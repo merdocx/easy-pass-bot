@@ -1,7 +1,7 @@
 import logging
 import aiosqlite
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardRemove
 from ..database import db
 from ..keyboards.admin_keyboards import get_admin_approval_keyboard
 from ..keyboards.resident_keyboards import get_resident_main_menu, get_approved_user_keyboard
@@ -19,6 +19,15 @@ async def notify_admins_new_registration(bot: Bot, user):
         keyboard = get_admin_approval_keyboard(user.id)
         for admin in admins:
             try:
+                # Сначала очищаем возможную реплай-клавиатуру у админа
+                try:
+                    await bot.send_message(
+                        chat_id=admin.telegram_id,
+                        text="",
+                        reply_markup=ReplyKeyboardRemove()
+                    )
+                except Exception:
+                    pass
                 await bot.send_message(
                     chat_id=admin.telegram_id,
                     text=text,
@@ -34,7 +43,20 @@ async def notify_user_approved(bot: Bot, user):
     """Уведомление пользователя об одобрении регистрации"""
     try:
         text = MESSAGES['REGISTRATION_APPROVED']
-        keyboard = get_approved_user_keyboard()
+        
+        # Выбираем клавиатуру в зависимости от роли пользователя
+        if user.role == 'security':
+            from ..keyboards.security_keyboards import get_security_main_menu
+            keyboard = get_security_main_menu()
+            text += "\n\nНажмите на кнопку \"🔍 Найти пропуск\" для поиска заявки."
+        elif user.role == 'admin':
+            # Для администраторов не показываем клавиатуру
+            keyboard = None
+            text += "\n\nВы будете получать уведомления о новых заявках на регистрацию."
+        else:
+            # Для жителей используем стандартную клавиатуру
+            keyboard = get_approved_user_keyboard()
+        
         await bot.send_message(
             chat_id=user.telegram_id,
             text=text,
